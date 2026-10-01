@@ -96,7 +96,7 @@ for f in (1, 12, 24, 36, 48):
             inside = False
 check("auto-follow keeps subject inside the 9:16 frame", inside)
 bpy.ops.zgk.safe_zones(platform="TIKTOK")
-check("safe zones set", v.camera.data.show_safe_areas and v.safe_areas.title[0] > 0)
+check("safe zones set", v.zgk_overlay and v.zgk_platform == "TIKTOK")
 v.render.engine = "BLENDER_WORKBENCH"
 v.render.resolution_percentage = 20
 v.frame_set(48)

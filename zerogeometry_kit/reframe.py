@@ -15,6 +15,11 @@ ASPECTS = {
 
 def scale_lens(cam_data, k):
     cam_data.lens *= k
+    snap = cam_data.get("zgk_lens_orig")
+    if snap:                                   # keep Auto-Follow's saved original in step
+        snap = list(snap)
+        cam_data["zgk_lens_orig"] = [v * k if (i % 2 or snap[0] == -1.0) and i > 0 else v
+                                     for i, v in enumerate(snap)]
     for fc in _fcurves(cam_data):
         if fc.data_path == "lens":
             for kp in fc.keyframe_points:
@@ -59,6 +64,11 @@ class ZGK_OT_reframe(bpy.types.Operator):
             bpy.ops.scene.new(type="FULL_COPY")
             sc = context.scene
             sc.name = f"{src.name}_{self.aspect}"
+            sc["zgk_source"] = src.get("zgk_source", src.name)        # remember the master scene
+            # make sure the copy owns its cameras: never rescale the master's lenses by accident
+            for ob in sc.objects:
+                if ob.type == "CAMERA" and ob.data.users > 1:
+                    ob.data = ob.data.copy()
         else:
             sc = src
         k = self.zoom or suggested_zoom(sw, sh, dw, dh, self.subject_width)
@@ -138,90 +148,150 @@ class ZGK_OT_reframe_follow(bpy.types.Operator):
     strength: FloatProperty(name="Strength", default=1.0, min=0.0, max=1.0,
                             description="1 = centre exactly, lower = gentle drift toward the subject")
     smoothing: IntProperty(name="Smoothing (frames)", default=9, min=1, max=97)
+    use_safe_zone: BoolProperty(name="Centre in the platform safe box", default=True,
+                                description="Aim for the centre of the area not covered by TikTok/Reels UI")
+
+    # ---- original-lens snapshot, so re-running never compounds the zoom
+    @staticmethod
+    def _snapshot_lens(cd):
+        if "zgk_lens_orig" in cd:
+            return
+        keys = [(kp.co.x, kp.co.y) for fc in _fcurves(cd) if fc.data_path == "lens" for kp in fc.keyframe_points]
+        cd["zgk_lens_orig"] = [v for xy in keys for v in xy] if keys else [-1.0, cd.lens]
+
+    @staticmethod
+    def _restore_lens(cd):
+        snap = list(cd.get("zgk_lens_orig", []))
+        if not snap:
+            return
+        for fc in _fcurves(cd):
+            if fc.data_path in {"lens", "shift_x", "shift_y"}:
+                fc.keyframe_points.clear()
+        if snap[0] == -1.0:
+            cd.lens = snap[1]
+        else:
+            for f, v in zip(snap[::2], snap[1::2]):
+                cd.lens = v
+                cd.keyframe_insert("lens", frame=f)
+        cd.shift_x = cd.shift_y = 0.0
 
     def execute(self, context):
         from bpy_extras.object_utils import world_to_camera_view
-        sc, cam = context.scene, context.scene.camera
-        if not cam:
+        sc = context.scene
+        if not sc.camera:
             self.report({"ERROR"}, "Scene has no active camera")
             return {"CANCELLED"}
         if not (sc.zgk_subject or sc.zgk_subject_collection):
             self.report({"ERROR"}, "Pick a subject object or collection first")
             return {"CANCELLED"}
-        cd = cam.data
-        # clear previous follow keys so we measure the raw framing
-        for fc in _fcurves(cd):
-            if fc.data_path in {"shift_x", "shift_y"}:
-                fc.keyframe_points.clear()
-        cd.shift_x = cd.shift_y = 0.0
+        # every camera this scene cuts to (beat cuts bind cameras to markers)
+        cams = {sc.camera} | {m.camera for m in sc.timeline_markers if m.camera}
+        for c in cams:
+            self._snapshot_lens(c.data)
+            self._restore_lens(c.data)
         w, h = sc.render.resolution_x, sc.render.resolution_y
         big = max(w, h)
+        # target point in the frame: centre of the platform safe box, or the frame centre
+        from .overlay import PLATFORMS
+        p = PLATFORMS.get(sc.zgk_platform, PLATFORMS["NONE"])
+        if self.use_safe_zone and sc.zgk_platform != "NONE" and h > w:
+            tx = (p["l"] + (1 - 0.17)) / 2
+            ty = (p["b"] + (1 - p["t"])) / 2
+            room_x, room_y = (1 - 0.17 - p["l"]), (1 - p["t"] - p["b"])
+        else:
+            tx = ty = 0.5
+            room_x = room_y = 1.0
         frames = list(range(sc.frame_start, sc.frame_end + 1))
-        sx, sy, lens = [], [], []
+        per_cam = {}                                         # camera data -> [(frame, sx, sy, lens)]
         f_keep = sc.frame_current
+        pts_world_cache = None
         for f in frames:
             sc.frame_set(f)
-            cd.shift_x = cd.shift_y = 0.0
+            cam = sc.camera
+            cd = cam.data
             base_lens = cd.lens
-            pts = [world_to_camera_view(sc, sc.camera, p) for p in _subject_points(context)]
-            pts = [p for p in pts if p.z > 0]
+            pts = [world_to_camera_view(sc, cam, q) for q in _subject_points(context)]
+            pts = [q for q in pts if q.z > 0]
             if not pts:
-                sx.append(0.0); sy.append(0.0); lens.append(base_lens)
+                per_cam.setdefault(cd, []).append((f, 0.0, 0.0, base_lens))
                 continue
-            x0, x1 = min(p.x for p in pts), max(p.x for p in pts)
-            y0, y1 = min(p.y for p in pts), max(p.y for p in pts)
+            x0, x1 = min(q.x for q in pts), max(q.x for q in pts)
+            y0, y1 = min(q.y for q in pts), max(q.y for q in pts)
             k = 1.0
             if self.fit:
-                room = 1.0 - 2 * self.margin
-                k = min(1.0, room / max(x1 - x0, 1e-6), room / max(y1 - y0, 1e-6))
-            # shift is measured in units of the frame's largest side; zooming scales the offset by k
-            sx.append(((x0 + x1) / 2 - 0.5) * (w / big) * k * self.strength if self.follow_x else 0.0)
-            sy.append(((y0 + y1) / 2 - 0.5) * (h / big) * k * self.strength if self.follow_y else 0.0)
-            lens.append(base_lens * k)
-        sx, sy = _smooth(sx, self.smoothing), _smooth(sy, self.smoothing)
-        lens = _smooth(lens, self.smoothing) if self.fit else lens
-        for f, a, b, l in zip(frames, sx, sy, lens):
-            if self.follow_x:
-                cd.shift_x = a; cd.keyframe_insert("shift_x", frame=f)
-            if self.follow_y:
-                cd.shift_y = b; cd.keyframe_insert("shift_y", frame=f)
-            if self.fit:
-                cd.lens = l; cd.keyframe_insert("lens", frame=f)
+                k = min(1.0, room_x * (1 - 2 * self.margin) / max(x1 - x0, 1e-6),
+                        room_y * (1 - 2 * self.margin) / max(y1 - y0, 1e-6))
+            # zooming out by k pulls everything toward the centre; then shift so the subject lands on target.
+            # shift is in units of the frame's largest side.
+            cx = 0.5 + ((x0 + x1) / 2 - 0.5) * k
+            cy = 0.5 + ((y0 + y1) / 2 - 0.5) * k
+            sx = (cx - tx) * (w / big) * self.strength if self.follow_x else 0.0
+            sy = (cy - ty) * (h / big) * self.strength if self.follow_y else 0.0
+            per_cam.setdefault(cd, []).append((f, sx, sy, base_lens * k))
+        for cd, rows in per_cam.items():
+            fs = [r[0] for r in rows]
+            sxs = _smooth([r[1] for r in rows], self.smoothing)
+            sys_ = _smooth([r[2] for r in rows], self.smoothing)
+            ls = _smooth([r[3] for r in rows], self.smoothing) if self.fit else [r[3] for r in rows]
+            for f, a, b, l in zip(fs, sxs, sys_, ls):
+                if self.follow_x:
+                    cd.shift_x = a; cd.keyframe_insert("shift_x", frame=f)
+                if self.follow_y:
+                    cd.shift_y = b; cd.keyframe_insert("shift_y", frame=f)
+                if self.fit:
+                    cd.lens = l; cd.keyframe_insert("lens", frame=f)
         sc.frame_set(f_keep)
-        self.report({"INFO"}, f"Followed subject over {len(frames)} frames")
+        self.report({"INFO"}, f"Followed subject over {len(frames)} frames on {len(per_cam)} camera(s)")
+        return {"FINISHED"}
+
+
+class ZGK_OT_reframe_follow_clear(bpy.types.Operator):
+    """Remove Auto-Follow and restore every camera's original lens"""
+    bl_idname = "zgk.reframe_follow_clear"
+    bl_label = "Clear Follow"
+    bl_options = {"REGISTER", "UNDO"}
+
+    def execute(self, context):
+        sc = context.scene
+        cams = ({sc.camera} if sc.camera else set()) | {m.camera for m in sc.timeline_markers if m.camera}
+        n = 0
+        for c in cams:
+            if "zgk_lens_orig" in c.data:
+                ZGK_OT_reframe_follow._restore_lens(c.data)
+                del c.data["zgk_lens_orig"]
+                n += 1
+        self.report({"INFO"}, f"Restored {n} camera(s)")
         return {"FINISHED"}
 
 
 # ---------------------------------------------------------------- social safe zones
-# fraction of frame kept clear of platform UI (left, right, top, bottom), for 9:16 video
-SAFE_ZONES = {
-    "TIKTOK": ((0.06, 0.18, 0.08, 0.20), "TikTok: right-hand buttons, caption + music bar at the bottom"),
-    "REELS": ((0.06, 0.16, 0.08, 0.22), "Instagram Reels: right-hand buttons, caption at the bottom"),
-    "SHORTS": ((0.06, 0.15, 0.08, 0.18), "YouTube Shorts"),
-}
-
-
 class ZGK_OT_safe_zones(bpy.types.Operator):
-    """Show where the platform's buttons and captions will cover your video (camera safe areas)"""
+    """Show where the platform's buttons and captions cover a vertical video (ZeroGeometry overlay)"""
     bl_idname = "zgk.safe_zones"
     bl_label = "Social Safe Zones"
     bl_options = {"REGISTER", "UNDO"}
 
-    platform: EnumProperty(name="Platform", items=[(k, k.title(), v[1]) for k, v in SAFE_ZONES.items()],
-                           default="TIKTOK")
+    platform: EnumProperty(name="Platform", items=[
+        ("TIKTOK", "TikTok", "Right-hand buttons, caption + music bar at the bottom"),
+        ("REELS", "Reels", "Instagram Reels"),
+        ("SHORTS", "Shorts", "YouTube Shorts"),
+        ("NONE", "Off", "Hide the safe zones"),
+    ], default="TIKTOK")
 
     def execute(self, context):
         sc = context.scene
-        l, r, t, b = SAFE_ZONES[self.platform][0]
-        # Blender safe areas are symmetric: use the tightest side on each axis
-        sc.safe_areas.title = (2 * max(l, r), 2 * max(t, b))
-        sc.safe_areas.action = (2 * min(l, r), 2 * min(t, b))
-        cams = {sc.camera} if sc.camera else set()
-        cams |= {m.camera for m in sc.timeline_markers if m.camera}
+        sc.zgk_platform = self.platform
+        sc.zgk_overlay = True
+        cams = ({sc.camera} if sc.camera else set()) | {m.camera for m in sc.timeline_markers if m.camera}
         for c in cams:
-            c.data.show_safe_areas = True
+            c.data.show_passepartout = True
             c.data.passepartout_alpha = 0.85
-        self.report({"INFO"}, f"Inner box = keep text/product inside ({self.platform.title()})")
+        if context.screen:
+            for area in context.screen.areas:
+                if area.type == "VIEW_3D":
+                    area.tag_redraw()
+        if self.platform != "NONE":
+            self.report({"INFO"}, "Lime box = keep text and product inside (camera view)")
         return {"FINISHED"}
 
 
@@ -255,22 +325,38 @@ class ZGK_OT_render_formats(bpy.types.Operator):
 
     def execute(self, context):
         import os
-        base = context.scene.name.split("_")[0]
-        scenes = [s for s in bpy.data.scenes if s.name == base or s.name.startswith(base + "_")]
+        master = context.scene.get("zgk_source", context.scene.name)
+        scenes = [s for s in bpy.data.scenes if s.name == master or s.get("zgk_source") == master]
         out_dir = bpy.path.abspath("//zgk_renders") if bpy.data.filepath else os.path.join(
             os.path.expanduser("~"), "zgk_renders")
         os.makedirs(out_dir, exist_ok=True)
+        done = []
         for s in scenes:
             r = s.render
+            if hasattr(r.image_settings, "media_type"):       # Blender 5+: video is its own media type
+                r.image_settings.media_type = "VIDEO"
             r.image_settings.file_format = "FFMPEG"
             r.ffmpeg.format = "MPEG4"
             r.ffmpeg.codec = "H264"
             r.ffmpeg.constant_rate_factor = "HIGH"
+            r.ffmpeg.audio_codec = "AAC" if s.sequence_editor else "NONE"   # keep the beat-sync music
             r.filepath = os.path.join(out_dir, s.name + "_")
-            bpy.ops.render.render(animation=True, scene=s.name)
+            # H.264 needs even pixel sizes: e.g. 4:5 (1080x1350) at 50% = 540x675 would fail.
+            keep_res = (r.resolution_x, r.resolution_y)
+            def eff(v):
+                return int(v * r.resolution_percentage / 100)
+            while eff(r.resolution_x) % 2:
+                r.resolution_x += 1
+            while eff(r.resolution_y) % 2:
+                r.resolution_y += 1
+            try:
+                bpy.ops.render.render(animation=True, scene=s.name)
+            finally:
+                r.resolution_x, r.resolution_y = keep_res
+            done.append(s.name)
         self.report({"INFO"}, f"Rendered {len(scenes)} format(s) to {out_dir}")
         return {"FINISHED"}
 
 
-classes = (ZGK_OT_reframe, ZGK_OT_reframe_nudge, ZGK_OT_reframe_follow, ZGK_OT_safe_zones,
+classes = (ZGK_OT_reframe, ZGK_OT_reframe_nudge, ZGK_OT_reframe_follow, ZGK_OT_reframe_follow_clear, ZGK_OT_safe_zones,
            ZGK_OT_reframe_all, ZGK_OT_render_formats)

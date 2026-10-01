@@ -62,9 +62,13 @@ class ZGK_OT_wedge(bpy.types.Operator):
         out_dir = bpy.path.abspath("//zgk_wedge") if bpy.data.filepath else os.path.join(
             os.path.expanduser("~"), "zgk_wedge")
         os.makedirs(out_dir, exist_ok=True)
-        keep = (sc.render.filepath, sc.render.resolution_percentage, sc.render.image_settings.file_format)
+        ims = sc.render.image_settings
+        keep = (sc.render.filepath, sc.render.resolution_percentage, ims.file_format)
+        keep_media = getattr(ims, "media_type", None)
         sc.render.resolution_percentage = self.percent
-        sc.render.image_settings.file_format = "PNG"
+        if keep_media is not None:                # Blender 5+: a scene set to video must switch to images
+            ims.media_type = "IMAGE"
+        ims.file_format = "PNG"
         values = np.linspace(self.start, self.end, self.count)
         tiles = []
         try:
@@ -78,27 +82,77 @@ class ZGK_OT_wedge(bpy.types.Operator):
                 bpy.data.images.remove(img)
         finally:
             _set(owner, attr, idx, original)
-            sc.render.filepath, sc.render.resolution_percentage, sc.render.image_settings.file_format = keep
+            if keep_media is not None:
+                ims.media_type = keep_media
+            sc.render.filepath, sc.render.resolution_percentage, ims.file_format = keep
+        # ---- ZeroGeometry contact sheet: ink background, header with lime rule, lime value labels
+        INK, LIME = (0.039, 0.039, 0.039, 1.0), (0.8, 1.0, 0.0, 1.0)
         th, tw = tiles[0].shape[:2]
         cols = min(self.columns, len(tiles))
         rows = -(-len(tiles) // cols)
-        gap = max(4, tw // 60)
-        sheet = np.ones(((th + gap) * rows + gap, (tw + gap) * cols + gap, 4), dtype=np.float32) * 0.08
-        sheet[..., 3] = 1
+        gap = max(6, tw // 50)
+        lab = 28                                                # label strip under each tile
+        head = 64
+        W = (tw + gap) * cols + gap
+        H = (th + lab + gap) * rows + gap + head
+        sheet = np.empty((H, W, 4), dtype=np.float32)
+        sheet[:] = INK
+        sheet[H - head:H - head + 3, :] = LIME                   # rule under the header (rows are bottom-up)
+        cells = []
         for i, t in enumerate(tiles):
             r, c = divmod(i, cols)
-            y = sheet.shape[0] - (r + 1) * (th + gap)            # Blender pixels start bottom-left
+            top = H - head - gap - r * (th + lab + gap)          # top edge of this cell (bottom-up coords)
             x = gap + c * (tw + gap)
-            sheet[y:y + th, x:x + tw] = t
-        sh = bpy.data.images.new("ZGK_Wedge_Sheet", sheet.shape[1], sheet.shape[0], alpha=True)
+            sheet[top - th:top, x:x + tw] = t
+            sheet[top - th - lab:top - th, x:x + 3] = LIME       # lime tick beside the value
+            cells.append((x, top - th - lab))
+        path = os.path.join(out_dir, "wedge_sheet.png")
+        sh = bpy.data.images.new("ZGK_Wedge_Sheet", W, H, alpha=True)
         sh.pixels[:] = sheet.ravel()
-        sh.filepath_raw = os.path.join(out_dir, "wedge_sheet.png")
+        sh.filepath_raw = path
         sh.file_format = "PNG"
         sh.save()
+        bpy.data.images.remove(sh)
+        self._burn_text(path, W, H, head, cells, values)
         with open(os.path.join(out_dir, "wedge_values.txt"), "w") as fh:
             fh.write(f"{self.data_path}\n" + "\n".join(f"{i:02d}: {v:.6g}" for i, v in enumerate(values)))
-        self.report({"INFO"}, f"Contact sheet: {sh.filepath_raw}")
+        self.report({"INFO"}, f"Contact sheet: {path}")
         return {"FINISHED"}
+
+    def _burn_text(self, path, W, H, head, cells, values):
+        """Brand type on the sheet: 'ZERO GEOMETRY · WEDGE' header + each tile's value (needs Blender 4.1+)."""
+        try:
+            import blf, imbuf
+            from .overlay import fonts
+            f = fonts()
+            _draw = blf.draw_buffer if hasattr(blf, "draw_buffer") else blf.draw   # image buffers need draw_buffer
+            ib = imbuf.load(path)
+            prop = self.data_path.split(".")[-1][:60]
+            with blf.bind_imbuf(f.get("light", 0), ib):
+                blf.size(f.get("light", 0), 22)
+                blf.color(f.get("light", 0), 1, 1, 1, 1)
+                blf.position(f.get("light", 0), 16, H - 40, 0)
+                _draw(f.get("light", 0), "ZERO ")
+                zw = blf.dimensions(f.get("light", 0), "ZERO ")[0]
+            with blf.bind_imbuf(f.get("bold", 0), ib):
+                blf.size(f.get("bold", 0), 22)
+                blf.color(f.get("bold", 0), 1, 1, 1, 1)
+                blf.position(f.get("bold", 0), 16 + zw, H - 40, 0)
+                _draw(f.get("bold", 0), "GEOMETRY")
+                gw = blf.dimensions(f.get("bold", 0), "GEOMETRY")[0]
+            with blf.bind_imbuf(f.get("mono", 0), ib):
+                m = f.get("mono", 0)
+                blf.size(m, 15)
+                blf.color(m, 0.8, 1.0, 0.0, 1)
+                blf.position(m, 30 + zw + gw, H - 38, 0)
+                _draw(m, f"WEDGE  ·  {prop}  ·  {self.start:g} to {self.end:g}")
+                blf.color(m, 0.9, 0.9, 0.9, 1)
+                for i, ((x, y), v) in enumerate(zip(cells, values)):
+                    blf.position(m, x + 10, y + 8, 0)
+                    _draw(m, f"{i:02d}   {v:.4g}")
+            imbuf.write(ib, filepath=path) if hasattr(imbuf, "write") else ib.save(filepath=path)
+        except Exception as ex:                                  # older Blender: sheet still works, no labels
+            print("ZeroGeometry Kit: wedge labels skipped:", ex)
 
 
 classes = (ZGK_OT_wedge,)

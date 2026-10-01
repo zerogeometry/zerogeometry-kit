@@ -1,7 +1,7 @@
 schema_version = "1.0.0"
 
 id = "zerogeometry_kit"
-version = "0.1.0"
+version = "0.2.0"
 name = "ZeroGeometry Kit"
 tagline = "Beat sync, perfect loops, vertical reframing and wedge renders"
 maintainer = "ZeroGeometry"

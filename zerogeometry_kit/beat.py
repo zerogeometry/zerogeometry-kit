@@ -16,6 +16,9 @@ def load_mono(path):
     data = np.asarray(snd.data(), dtype=np.float32)
     if data.ndim == 2:
         data = data.mean(axis=1)
+    while rate > 24000:                       # beats live well below 6 kHz: halve the work for full songs
+        data = data[: len(data) // 2 * 2].reshape(-1, 2).mean(axis=1)
+        rate //= 2
     return data, rate
 
 
@@ -249,4 +252,35 @@ class ZGK_OT_beat_cuts(bpy.types.Operator):
         return {"FINISHED"}
 
 
-classes = (ZGK_OT_beat_detect, ZGK_OT_beat_grid, ZGK_OT_beat_key, ZGK_OT_beat_cuts)
+class ZGK_OT_beat_tempo(bpy.types.Operator):
+    """Double or halve the detected tempo (e.g. a 70 BPM half-time read of a 140 BPM drill track)"""
+    bl_idname = "zgk.beat_tempo"
+    bl_label = "Tempo x2 / ½"
+    bl_options = {"REGISTER", "UNDO"}
+
+    mode: EnumProperty(items=[("DOUBLE", "x2", "Add a beat between every pair"),
+                              ("HALF", "½", "Keep every other beat")], default="DOUBLE")
+
+    def execute(self, context):
+        sc = context.scene
+        beats = beat_frames(sc)
+        if len(beats) < 2:
+            self.report({"ERROR"}, "No beat markers")
+            return {"CANCELLED"}
+        if self.mode == "DOUBLE":
+            new = []
+            for a, b in zip(beats, beats[1:]):
+                new += [a, round((a + b) / 2)]
+            new.append(beats[-1])
+            sc.zgk_bpm *= 2
+        else:
+            new = beats[::2]
+            sc.zgk_bpm /= 2
+        for m in [m for m in sc.timeline_markers if m.name.startswith(MARKER_PREFIX)]:
+            sc.timeline_markers.remove(m)
+        for i, f in enumerate(new):
+            sc.timeline_markers.new(f"{MARKER_PREFIX}{i + 1:03d}", frame=f)
+        return {"FINISHED"}
+
+
+classes = (ZGK_OT_beat_detect, ZGK_OT_beat_grid, ZGK_OT_beat_key, ZGK_OT_beat_cuts, ZGK_OT_beat_tempo)
