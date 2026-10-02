@@ -6,6 +6,12 @@ shots: before | reframe | beat | loop | help
 import os, sys
 import bpy
 
+# CLEAN_ENV: launched with --factory-startup so no other add-ons appear in shots; load ours from the repo
+if not hasattr(bpy.types, "ZGK_PT_main"):
+    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    import zerogeometry_kit
+    zerogeometry_kit.register()
+
 args = sys.argv[sys.argv.index("--") + 1:]
 SHOT, OUT = args[0], args[1]
 DEMO = os.path.dirname(bpy.data.filepath)

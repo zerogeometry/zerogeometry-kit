@@ -6,6 +6,12 @@ blender demo/zgk_demo.blend -P tests/gui_handtest.py -- <out_dir>
 import os, sys, glob, tempfile, traceback
 import bpy
 
+# CLEAN_ENV: launched with --factory-startup so no other add-ons appear in shots; load ours from the repo
+if not hasattr(bpy.types, "ZGK_PT_main"):
+    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    import zerogeometry_kit
+    zerogeometry_kit.register()
+
 OUT = sys.argv[sys.argv.index("--") + 1]
 os.makedirs(OUT, exist_ok=True)
 EXPORT = os.path.join(tempfile.gettempdir(), "zgk_handtest_exports") + os.sep

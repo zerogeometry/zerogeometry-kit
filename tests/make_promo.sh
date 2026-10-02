@@ -11,7 +11,7 @@ D="$(pwd)/demo/zgk_demo.blend"
 "$B" --command extension build --source-dir zerogeometry_kit --output-dir dist 2>&1 | tail -1
 "$B" --command extension install-file -r user_default -e dist/zerogeometry_kit-1.0.1.zip 2>&1 | tail -1
 shot() {
-    timeout 180 "$B" "$D" -P tests/gui_promo.py -- "$1" "$P/$2" 2>&1 | grep -E "PROMO|Error|Traceback" | head -4
+    timeout 180 "$B" --factory-startup "$D" -P tests/gui_promo.py -- "$1" "$P/$2" 2>&1 | grep -E "PROMO|Error|Traceback" | head -4
 }
 shot before  01_before_16x9.png
 shot reframe 02_reframe_9x16_tiktok.png
