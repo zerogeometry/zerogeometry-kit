@@ -79,6 +79,16 @@ bpy.ops.zgk.loop_fix(method="CLOSE")
 bad2 = zgk.loop.loop_report(bpy.context, selected_only=True)
 check("loop fix closes it", len(bad2) == 0, f"{len(bad2)} left")
 
+# full-turn spin must count as a closed loop
+spin = bpy.data.objects.new("Spinner", None); sc.collection.objects.link(spin)
+spin.rotation_euler.z = 0; spin.keyframe_insert("rotation_euler", index=2, frame=1)
+spin.rotation_euler.z = 6.283185307; spin.keyframe_insert("rotation_euler", index=2, frame=49)
+for o in sc.objects: o.select_set(False)
+spin.select_set(True)
+check("loop check accepts a full 360 spin", len(zgk.loop.loop_report(bpy.context, selected_only=True)) == 0)
+bpy.data.objects.remove(spin)
+cube.select_set(True)
+
 # ---------- vertical reframe + auto-follow ----------
 bpy.ops.zgk.reframe(aspect="9x16", copy_scene=True)
 v = bpy.context.scene

@@ -144,6 +144,8 @@ class ZGK_OT_reframe_follow(bpy.types.Operator):
     follow_x: BoolProperty(name="Follow horizontally", default=True)
     follow_y: BoolProperty(name="Follow vertically", default=False)
     fit: BoolProperty(name="Zoom out to keep it inside", default=True)
+    fill: BoolProperty(name="Fill frame (zoom in too)", default=False,
+                       description="Also punch in when the subject is small, so it fills the frame / safe box")
     margin: FloatProperty(name="Safe margin", default=0.08, min=0.0, max=0.4)
     strength: FloatProperty(name="Strength", default=1.0, min=0.0, max=1.0,
                             description="1 = centre exactly, lower = gentle drift toward the subject")
@@ -218,9 +220,10 @@ class ZGK_OT_reframe_follow(bpy.types.Operator):
             x0, x1 = min(q.x for q in pts), max(q.x for q in pts)
             y0, y1 = min(q.y for q in pts), max(q.y for q in pts)
             k = 1.0
-            if self.fit:
-                k = min(1.0, room_x * (1 - 2 * self.margin) / max(x1 - x0, 1e-6),
+            if self.fit or self.fill:
+                k = min(room_x * (1 - 2 * self.margin) / max(x1 - x0, 1e-6),
                         room_y * (1 - 2 * self.margin) / max(y1 - y0, 1e-6))
+                k = min(k, 8.0) if self.fill else min(k, 1.0)          # fill: up to 8x punch-in
             # zooming out by k pulls everything toward the centre; then shift so the subject lands on target.
             # shift is in units of the frame's largest side.
             cx = 0.5 + ((x0 + x1) / 2 - 0.5) * k
@@ -232,13 +235,14 @@ class ZGK_OT_reframe_follow(bpy.types.Operator):
             fs = [r[0] for r in rows]
             sxs = _smooth([r[1] for r in rows], self.smoothing)
             sys_ = _smooth([r[2] for r in rows], self.smoothing)
-            ls = _smooth([r[3] for r in rows], self.smoothing) if self.fit else [r[3] for r in rows]
+            zoom = self.fit or self.fill
+            ls = _smooth([r[3] for r in rows], self.smoothing) if zoom else [r[3] for r in rows]
             for f, a, b, l in zip(fs, sxs, sys_, ls):
                 if self.follow_x:
                     cd.shift_x = a; cd.keyframe_insert("shift_x", frame=f)
                 if self.follow_y:
                     cd.shift_y = b; cd.keyframe_insert("shift_y", frame=f)
-                if self.fit:
+                if zoom:
                     cd.lens = l; cd.keyframe_insert("lens", frame=f)
         sc.frame_set(f_keep)
         self.report({"INFO"}, f"Followed subject over {len(frames)} frames on {len(per_cam)} camera(s)")

@@ -89,6 +89,17 @@ for f in (1, 24, 48):
         okz = False
 check("follow keeps product inside the TikTok safe box", okz)
 
+# ---------- 3b. fill: a small subject is punched in to fill the safe box width
+bpy.ops.zgk.reframe_follow(fit=True, fill=True, smoothing=1, use_safe_zone=True, margin=0.08)
+v.frame_set(24)
+pts = [world_to_camera_view(v, v.camera, v.zgk_subject.matrix_world @ mathutils.Vector(c)) for c in v.zgk_subject.bound_box]
+span_x = max(q.x for q in pts) - min(q.x for q in pts)
+span_y = max(q.y for q in pts) - min(q.y for q in pts)
+target_x = (0.83 - p["l"]) * 0.84
+target_y = (1 - p["t"] - p["b"]) * 0.84
+check("fill frame punches in to the safe box", abs(span_x - target_x) < 0.03 or abs(span_y - target_y) < 0.03,
+      f"span {span_x:.2f}x{span_y:.2f}, target {target_x:.2f}x{target_y:.2f}")
+
 # ---------- 4. multi-camera (beat cuts): both cameras follow
 bpy.ops.zgk.reframe_follow_clear()
 bpy.ops.zgk.beat_grid(bpm=120)
@@ -145,6 +156,16 @@ import numpy as np
 px = np.array(img.pixels[:]).reshape(img.size[1], img.size[0], 4)
 lime_rows = [y for y in range(img.size[1]) if abs(px[y, img.size[0] // 2, 0] - 0.8) < 0.05 and px[y, img.size[0] // 2, 1] > 0.95]
 check("wedge sheet has ZeroGeometry header rule", len(lime_rows) >= 2, f"{img.size[0]}x{img.size[1]}")
+
+# ---------- 8. wedge an ANIMATED property: keys must not override the wedge values
+bpy.ops.zgk.wedge(data_path='bpy.data.objects["Product"].location[1]', start=-1.5, end=1.5, count=3,
+                  percent=10, columns=3)
+a = bpy.data.images.load(os.path.join(OUT, "zgk_wedge", "wedge_00.png"))
+b = bpy.data.images.load(os.path.join(OUT, "zgk_wedge", "wedge_02.png"))
+diff = float(np.abs(np.array(a.pixels[:]) - np.array(b.pixels[:])).mean())
+prod = bpy.data.objects["Product"]
+still_animated = all(not fc.mute for fc in zgk.beat._fcurves(prod))
+check("wedge works on animated property + restores keys", diff > 1e-3 and still_animated, f"tile diff {diff:.4f}")
 
 zgk.unregister()
 print(f"RESULT {sum(res)}/{len(res)} passed")

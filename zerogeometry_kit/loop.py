@@ -1,5 +1,6 @@
 """Loop Doctor: find what breaks a seamless loop (curves that don't return to their start value,
 movie/sequence textures that clamp instead of cycling) and fix it."""
+import math
 import bpy
 from bpy.props import EnumProperty, FloatProperty
 from .beat import _fcurves
@@ -30,7 +31,11 @@ def loop_report(context, selected_only=True, tol=1e-4):
             if any(m.type == "CYCLES" for m in fc.modifiers):
                 continue
             a, b = fc.evaluate(f0), fc.evaluate(f1)
-            if abs(a - b) > tol * max(1.0, abs(a)):
+            d = a - b
+            if fc.data_path.endswith("rotation_euler"):
+                # a whole number of turns looks identical: 0 deg and 360 deg close the loop
+                d = math.remainder(d, math.tau)
+            if abs(d) > tol * max(1.0, abs(a)):
                 bad.append((owner, fc.data_path, fc.array_index, a, b))
     return bad
 
@@ -97,7 +102,8 @@ class ZGK_OT_loop_fix(bpy.types.Operator):
             for fc in _fcurves(idb):
                 if self.method in {"CLOSE", "BOTH"}:
                     a, b = fc.evaluate(f0), fc.evaluate(f1)
-                    if abs(a - b) > 1e-6:
+                    d = math.remainder(a - b, math.tau) if fc.data_path.endswith("rotation_euler") else a - b
+                    if abs(d) > 1e-6:
                         fc.keyframe_points.insert(f1, a, options={"FAST"})
                         # drop keys that extended past the loop end
                         for kp in [k for k in fc.keyframe_points if k.co.x > f1 + 1e-6]:

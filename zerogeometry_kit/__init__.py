@@ -6,9 +6,9 @@ import os
 import bpy
 import bpy.utils.previews
 from bpy.props import FloatProperty, IntProperty, PointerProperty, BoolProperty, EnumProperty
-from . import reframe, beat, loop, wedge, overlay
+from . import reframe, beat, loop, wedge, overlay, help
 
-MODULES = (reframe, beat, loop, wedge, overlay)
+MODULES = (reframe, beat, loop, wedge, overlay, help)
 _icons = None
 
 
@@ -43,14 +43,19 @@ class ZGK_PT_main(ZGK_PT_base, bpy.types.Panel):
 
 class ZGK_PT_child(ZGK_PT_base):
     bl_parent_id = "ZGK_PT_main"
+    help_topic = "QUICKSTART"
 
     def draw_header(self, context):
         self.layout.label(text="", icon_value=icon("zg"))
+
+    def draw_header_preset(self, context):
+        self.layout.operator("zgk.help", text="", icon="QUESTION", emboss=False).topic = self.help_topic
 
 
 class ZGK_PT_reframe(ZGK_PT_child, bpy.types.Panel):
     bl_label = "Vertical Reframe"
     bl_idname = "ZGK_PT_reframe"
+    help_topic = "REFRAME"
 
     def draw(self, context):
         sc, l = context.scene, self.layout
@@ -73,8 +78,10 @@ class ZGK_PT_reframe(ZGK_PT_child, bpy.types.Panel):
         box.prop(sc, "zgk_subject_collection", text="or Coll.")
         row = box.row(align=True)
         row.scale_y = 1.3
-        row.operator("zgk.reframe_follow", icon="CON_CAMERASOLVER")
+        op = row.operator("zgk.reframe_follow", icon="CON_CAMERASOLVER")
+        op.fill = sc.zgk_follow_fill
         row.operator("zgk.reframe_follow_clear", text="", icon="X")
+        box.prop(sc, "zgk_follow_fill", text="Fill frame (zoom in too)")
 
         col = l.column(align=True)
         col.separator()
@@ -94,6 +101,7 @@ class ZGK_PT_reframe(ZGK_PT_child, bpy.types.Panel):
 class ZGK_PT_beat(ZGK_PT_child, bpy.types.Panel):
     bl_label = "Beat Sync"
     bl_idname = "ZGK_PT_beat"
+    help_topic = "BEAT"
     bl_options = {"DEFAULT_CLOSED"}
 
     def draw(self, context):
@@ -120,6 +128,7 @@ class ZGK_PT_beat(ZGK_PT_child, bpy.types.Panel):
 class ZGK_PT_loop(ZGK_PT_child, bpy.types.Panel):
     bl_label = "Loop Doctor"
     bl_idname = "ZGK_PT_loop"
+    help_topic = "LOOP"
     bl_options = {"DEFAULT_CLOSED"}
 
     def draw(self, context):
@@ -137,6 +146,7 @@ class ZGK_PT_loop(ZGK_PT_child, bpy.types.Panel):
 class ZGK_PT_wedge(ZGK_PT_child, bpy.types.Panel):
     bl_label = "Wedge Batch"
     bl_idname = "ZGK_PT_wedge"
+    help_topic = "WEDGE"
     bl_options = {"DEFAULT_CLOSED"}
 
     def draw(self, context):
@@ -147,7 +157,16 @@ class ZGK_PT_wedge(ZGK_PT_child, bpy.types.Panel):
         row.operator("zgk.wedge", icon="IMGDISPLAY")
 
 
-PANELS = (ZGK_PT_main, ZGK_PT_reframe, ZGK_PT_beat, ZGK_PT_loop, ZGK_PT_wedge)
+class ZGK_PT_quickstart(ZGK_PT_child, bpy.types.Panel):
+    bl_label = "Quick Start"
+    bl_idname = "ZGK_PT_quickstart"
+    help_topic = "QUICKSTART"
+
+    def draw(self, context):
+        help.draw_quickstart(self.layout)
+
+
+PANELS = (ZGK_PT_main, ZGK_PT_reframe, ZGK_PT_beat, ZGK_PT_loop, ZGK_PT_wedge, ZGK_PT_quickstart)
 PROPS = {
     "zgk_bpm": FloatProperty(name="BPM", default=0.0),
     "zgk_loop_issues": IntProperty(default=0),
@@ -157,6 +176,8 @@ PROPS = {
     "zgk_subject_collection": PointerProperty(name="Subject collection", type=bpy.types.Collection,
                                               description="Keep every object in this collection in frame"),
     "zgk_overlay": BoolProperty(name="ZeroGeometry overlay", default=False),
+    "zgk_follow_fill": BoolProperty(name="Fill frame", default=True,
+                                    description="Auto-Follow also zooms in so the subject fills the safe area"),
     "zgk_platform": EnumProperty(name="Platform", items=[
         ("TIKTOK", "TikTok", ""), ("REELS", "Reels", ""), ("SHORTS", "Shorts", ""), ("NONE", "Off", "")],
         default="NONE"),

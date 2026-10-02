@@ -71,6 +71,19 @@ class ZGK_OT_wedge(bpy.types.Operator):
         ims.file_format = "PNG"
         values = np.linspace(self.start, self.end, self.count)
         tiles = []
+        # an animated property would override every wedge value at render time: mute its curve(s)
+        muted = []
+        try:
+            from .beat import _fcurves
+            rel = owner.path_from_id(attr)
+            for fc in _fcurves(owner.id_data):
+                if fc.data_path == rel and (idx is None or fc.array_index == idx) and not fc.mute:
+                    fc.mute = True
+                    muted.append(fc)
+        except Exception:
+            pass
+        if muted:
+            self.report({"INFO"}, "Animated property: its keys are muted during the wedge")
         try:
             for i, v in enumerate(values):
                 _set(owner, attr, idx, type(original)(v) if isinstance(original, int) else float(v))
@@ -81,6 +94,8 @@ class ZGK_OT_wedge(bpy.types.Operator):
                 tiles.append(px)
                 bpy.data.images.remove(img)
         finally:
+            for fc in muted:
+                fc.mute = False
             _set(owner, attr, idx, original)
             if keep_media is not None:
                 ims.media_type = keep_media

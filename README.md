@@ -31,6 +31,8 @@ In camera view: the platform safe zones, a ZERO **GEOMETRY** format badge, and a
 ## Wedge Batch
 Houdini-style wedging. Sweep any property (right-click → *Copy Full Data Path*) across N values, render a still for each, and get one **contact sheet** plus a values list.
 
+See **TUTORIAL.md** for a step-by-step guide. Promo screenshots are in `promo/`; the demo scene is in `demo/`.
+
 ## Install
 Download `zerogeometry_kit-<version>.zip`, then in Blender go to **Edit → Preferences → Get Extensions → ⌄ → Install from Disk**.
 
