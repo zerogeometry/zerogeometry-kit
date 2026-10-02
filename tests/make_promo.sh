@@ -1,10 +1,10 @@
 #!/bin/bash
 # Rebuild + reinstall the extension, rebuild the original demo scene, run the tests,
 # then capture every promo screenshot from the demo (no client work, no third-party music).
-cd /c/Users/user/Documents/zerogeometry-kit
-B="/c/Program Files/Blender Foundation/Blender 5.2/blender.exe"
-P="C:/Users/user/Documents/zerogeometry-kit/promo"
-D="C:/Users/user/Documents/zerogeometry-kit/demo/zgk_demo.blend"
+cd "$(dirname "$0")/.."
+B="${BLENDER:-/c/Program Files/Blender Foundation/Blender 5.2/blender.exe}"   # override with BLENDER=...
+P="$(pwd)/promo"
+D="$(pwd)/demo/zgk_demo.blend"
 "$B" -b --factory-startup -P tests/test_headless.py 2>&1 | grep -E "FAIL|RESULT|Traceback"
 "$B" -b --factory-startup -P tests/test_more.py 2>&1 | grep -E "FAIL|RESULT|Traceback"
 "$B" -b --factory-startup -P demo/build_demo.py 2>&1 | grep -E "DEMO_BUILT|Error"

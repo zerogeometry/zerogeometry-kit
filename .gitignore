@@ -4,3 +4,5 @@ dist/
 handtest/
 ZeroGeometry Exports/
 promo_overview.png
+*.blend1
+demo/zgk_wedge/
