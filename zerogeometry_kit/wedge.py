@@ -1,22 +1,41 @@
 """Wedge Batch (Houdini-style wedging): sweep one property across N values, render a still for each,
 and assemble a single contact sheet so you can compare variations at a glance."""
 import os
+import re
 import bpy
 import numpy as np
-from bpy.props import StringProperty, FloatProperty, IntProperty, EnumProperty
+from bpy.props import StringProperty, FloatProperty, IntProperty
+
+
+_DATA_PATH = re.compile(r'^bpy\.data\.(\w+)\["((?:[^"\\]|\\.)*)"\]\.(.+)$')
 
 
 def _resolve(path):
-    """'bpy.data.objects["Cube"].location[2]' -> (owner, attr, index|None). Only bpy.data paths."""
-    if not path.startswith("bpy.data."):
-        raise ValueError("Path must start with bpy.data.")
+    """'bpy.data.objects["Cube"].location[2]' -> (owner, attr, index|None).
+    Parsed safely (no eval): data-block collection + name, then Blender's own path_resolve."""
+    m = _DATA_PATH.match(path)
+    if not m:
+        raise ValueError('expected a path like bpy.data.objects["Cube"].location[2] '
+                         "(right-click a field > Copy Full Data Path)")
+    coll_name, name, rest = m.group(1), m.group(2).replace('\\"', '"').replace("\\\\", "\\"), m.group(3)
+    coll = getattr(bpy.data, coll_name, None)
+    if not isinstance(coll, bpy.types.bpy_prop_collection):
+        raise ValueError(f"unknown data collection '{coll_name}'")
+    idb = coll.get(name)
+    if idb is None:
+        raise ValueError(f"'{name}' not found in {coll_name}")
     idx = None
-    body = path
-    if body.endswith("]") and body[body.rfind("[") + 1:-1].isdigit():
-        idx = int(body[body.rfind("[") + 1:-1])
-        body = body[:body.rfind("[")]
-    owner_expr, attr = body.rsplit(".", 1)
-    owner = eval(owner_expr, {"bpy": bpy, "__builtins__": {}})
+    im = re.search(r"\[(\d+)\]$", rest)
+    if im:
+        idx = int(im.group(1))
+        rest = rest[:im.start()]
+    owner_path, _, attr = rest.rpartition(".")
+    if "__" in rest:
+        raise ValueError("not a Blender property path")
+    owner = idb.path_resolve(owner_path) if owner_path else idb
+    rna = getattr(owner, "bl_rna", None)
+    if rna is None or attr not in rna.properties:            # only real, documented Blender properties
+        raise ValueError(f"'{attr}' is not a property here")
     return owner, attr, idx
 
 

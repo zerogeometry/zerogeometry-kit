@@ -31,7 +31,7 @@ Houdini-style wedging. Copy any number field's data path, click **Wedge Render**
 Everything is saved to the **Export Folder** shown in the panel. The default is `ZeroGeometry Exports/` next to your .blend; if the file hasn't been saved yet, it's `Videos/ZeroGeometry Exports`. Inside: `Renders/` and `Wedges/<property>_<time>/`. Use **Open** to view it, or the folder button to choose another location.
 
 ## Install
-In Blender: **Edit → Preferences → Get Extensions → ⌄ → Install from Disk**, then pick `zerogeometry_kit-1.0.0.zip`. Try it on `demo/zgk_demo.blend`, an original scene with a royalty-free generated beat.
+In Blender: **Edit → Preferences → Get Extensions → ⌄ → Install from Disk**, then pick `zerogeometry_kit-1.0.1.zip`. Try it on `demo/zgk_demo.blend`, an original scene with a royalty-free generated beat.
 
 ## Develop / test
 ```

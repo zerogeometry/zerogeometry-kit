@@ -3,7 +3,7 @@ import os
 import bpy
 from bpy.props import StringProperty
 
-VERSION = "1.0.0"
+VERSION = "1.0.1"
 WEBSITE = "https://zerogeometry.com"
 GUIDE = os.path.join(os.path.dirname(__file__), "assets", "guide.html")
 

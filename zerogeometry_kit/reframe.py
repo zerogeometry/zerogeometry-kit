@@ -2,6 +2,7 @@
 framing, not a crop. Keyframed lenses are scaled too, and the work happens on a scene copy so the
 original edit is untouched."""
 import bpy
+from mathutils import Vector
 from bpy.props import EnumProperty, FloatProperty, BoolProperty, IntProperty
 from .beat import _fcurves
 from .paths import output_dir, format_label
@@ -141,7 +142,7 @@ def _subject_points(context):
         if o.type == "EMPTY":
             pts.append(o.matrix_world.translation.copy())
         else:
-            pts += [o.matrix_world @ __import__("mathutils").Vector(c) for c in o.bound_box]
+            pts += [o.matrix_world @ Vector(c) for c in o.bound_box]
     return pts
 
 
