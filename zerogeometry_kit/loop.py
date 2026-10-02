@@ -124,6 +124,7 @@ class ZGK_OT_loop_fix(bpy.types.Operator):
                             # shift the playback start instead of offsetting (offset is applied after wrap)
                             iu.frame_start -= iu.frame_offset
                             iu.frame_offset = 0
+        context.scene.zgk_loop_issues = len(loop_report(context, bool(context.selected_objects))) + len(texture_report(context))
         self.report({"INFO"}, f"Fixed {fixed} curve(s)")
         return {"FINISHED"}
 

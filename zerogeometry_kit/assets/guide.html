@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ZeroGeometry Kit Guide</title>
+<style>
+  :root { --lime: #ccff00; --ink: #0a0a0a; --line: #222; --text: #e6e6e6; --dim: #9a9a9a; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--ink); color: var(--text);
+         font: 16px/1.6 Poppins, "Segoe UI", system-ui, sans-serif; }
+  main { max-width: 760px; margin: 0 auto; padding: 48px 20px 80px; }
+  header { border-bottom: 2px solid var(--lime); padding-bottom: 20px; margin-bottom: 32px; }
+  .brand { font-size: 28px; letter-spacing: .04em; }
+  .brand b { font-weight: 600; }
+  .tag { color: var(--dim); margin-top: 4px; }
+  h2 { font-weight: 600; margin: 40px 0 8px; display: flex; gap: 12px; align-items: baseline; }
+  h2 .n { color: var(--lime); font-family: "IBM Plex Mono", Consolas, monospace; font-size: 15px; }
+  p { margin: 8px 0; }
+  ol, ul { padding-left: 22px; }
+  li { margin: 6px 0; }
+  code, kbd { font-family: "IBM Plex Mono", Consolas, monospace; font-size: 14px;
+              background: #161616; border: 1px solid var(--line); border-radius: 4px; padding: 1px 6px; }
+  .note { border-left: 3px solid var(--lime); background: #121212; padding: 12px 16px; margin: 16px 0; }
+  a { color: var(--lime); }
+  footer { margin-top: 56px; padding-top: 20px; border-top: 1px solid var(--line); color: var(--dim); font-size: 14px; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <div class="brand">ZERO <b>GEOMETRY</b> KIT</div>
+    <div class="tag">One 16:9 animation, every social format. Beat-synced, loop-perfect.</div>
+  </header>
+
+  <p>Open the panel: <b>3D Viewport</b>, press <kbd>N</kbd>, then pick the <b>ZeroGeometry</b> tab. Every section has a <b>?</b> button with a short how-to.</p>
+
+  <h2><span class="n">01</span> Vertical Reframe</h2>
+  <ol>
+    <li>Finish your animation in 16:9 as usual.</li>
+    <li>Click <b>9:16</b> (or 4:5, 1:1). A copy of the scene is made with every camera lens re-fitted. Your original is never touched. Switch between versions with the buttons at the top of the panel.</li>
+    <li>Set <b>Subject</b> to your product (an object or a whole collection) and click <b>Auto-Follow Subject</b>. Every frame is reframed so the product stays inside the frame. Tick <b>Fill frame</b> to also zoom in on small subjects.</li>
+    <li>Click <b>TikTok</b>, <b>Reels</b> or <b>Shorts</b> to see where the app's buttons and captions will cover your video. Auto-Follow then centres the product in the safe area.</li>
+    <li><b>Render All Formats</b> exports the original and every version as H.264 MP4 (with your music) to the Export Folder.</li>
+  </ol>
+  <div class="note">Not happy with Auto-Follow? Click <b>X</b> to restore the original lens, change settings, run it again. It never stacks.</div>
+
+  <h2><span class="n">02</span> Camera Guides</h2>
+  <p>Drawn in the viewport in camera view only. They never appear in your renders.</p>
+  <ul>
+    <li><b>ZERO GEOMETRY badge</b>: the current frame format.</li>
+    <li><b>Lime box</b>: the platform safe area. Keep text and product inside it.</li>
+    <li><b>Lime dot</b>: pulses on every beat marker, so you can feel the edit while scrubbing.</li>
+  </ul>
+  <p>Toggle them with <b>Camera Guides</b>. The eye button jumps to camera view.</p>
+
+  <h2><span class="n">03</span> Beat Sync</h2>
+  <ol>
+    <li><b>Detect Beats</b>: pick an mp3 or wav. A marker lands on every beat and the track is added as a sound strip. If the tempo reads half or double, use <b>Tempo ½</b> / <b>Tempo x2</b>.</li>
+    <li>No audio yet? <b>Beat Grid</b> makes markers from a BPM you choose.</li>
+    <li>Select objects, then <b>Squash</b>, <b>Hop</b>, <b>Light</b> or <b>Glow</b> keys a pulse on every beat. Fine-tune it in the redo panel (bottom-left): every N beats, amount, decay, stagger.</li>
+    <li>Select two or more cameras, then <b>Camera Cuts on Beats</b> cuts between them in time with the music.</li>
+  </ol>
+
+  <h2><span class="n">04</span> Loop Doctor</h2>
+  <ol>
+    <li>Set the frame range to exactly one loop.</li>
+    <li><b>Check Loop</b> lists every animation that doesn't end where it starts, and any video texture that will freeze.</li>
+    <li><b>Fix Loop</b> closes them. A full 360° spin already counts as closed.</li>
+  </ol>
+  <p>Works on the selected objects, or on everything when nothing is selected.</p>
+
+  <h2><span class="n">05</span> Wedge Batch</h2>
+  <ol>
+    <li>Right-click any number field and choose <b>Copy Full Data Path</b>.</li>
+    <li>Click <b>Wedge Render</b>. The path is pasted for you. Choose From, To and Steps.</li>
+    <li>You get one still per value plus a labelled contact sheet. <b>Open Last Contact Sheet</b> shows it.</li>
+  </ol>
+
+  <h2><span class="n">06</span> Where files go</h2>
+  <p>Everything is written to the <b>Export Folder</b> shown in the panel. The default is a folder called <code>ZeroGeometry Exports</code> next to your .blend file. If the file hasn't been saved yet, it goes to <code>Videos/ZeroGeometry Exports</code> in your home folder instead. You can change it at any time; the folder icon opens it.</p>
+  <ul>
+    <li><code>Renders/</code>: MP4s named like <code>MyScene_9x16.mp4</code></li>
+    <li><code>Wedges/</code>: one folder per wedge with the stills, <code>wedge_sheet.png</code> and the values</li>
+  </ul>
+
+  <footer>ZeroGeometry Kit · GPL-3.0-or-later · <a href="https://zerogeometry.com">zerogeometry.com</a></footer>
+</main>
+</body>
+</html>

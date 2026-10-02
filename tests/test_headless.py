@@ -21,6 +21,7 @@ sc = bpy.context.scene
 sc.frame_start, sc.frame_end = 1, 48
 sc.render.fps = 24
 sc.render.resolution_x, sc.render.resolution_y = 1920, 1080
+sc.zgk_output_dir = OUT + os.sep          # keep test output out of the user's Videos folder
 bpy.ops.mesh.primitive_cube_add(size=0.5, location=(0, -1.5, 0))
 cube = bpy.context.object
 cube.keyframe_insert("location", frame=1)
@@ -119,7 +120,7 @@ sc_w = v
 sc_w.render.filepath = os.path.join(OUT, "x")
 bpy.ops.zgk.wedge(data_path=f'bpy.data.objects["{cube.name}"].location[2]', start=-0.5, end=0.5,
                   count=4, percent=15, columns=2)
-sheet = os.path.join(os.path.expanduser("~"), "zgk_wedge", "wedge_sheet.png")
+sheet = bpy.context.scene.zgk_last_sheet   # unsaved file -> ~/Videos/ZeroGeometry Exports/Wedges/...
 check("wedge contact sheet written", os.path.exists(sheet), sheet)
 
 zgk.unregister()

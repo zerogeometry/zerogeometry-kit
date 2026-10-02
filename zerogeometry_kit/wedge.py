@@ -47,8 +47,37 @@ class ZGK_OT_wedge(bpy.types.Operator):
     percent: IntProperty(name="Resolution %", default=35, min=5, max=100)
     columns: IntProperty(name="Columns", default=3, min=1, max=12)
 
+    @classmethod
+    def poll(cls, context):
+        if not context.scene.camera:
+            cls.poll_message_set("Add a camera to the scene first")
+            return False
+        return True
+
     def invoke(self, context, event):
-        return context.window_manager.invoke_props_dialog(self, width=520)
+        clip = context.window_manager.clipboard.strip()
+        if clip.startswith("bpy.data.") and not self.data_path:
+            self.data_path = clip                      # pasted straight from Copy Full Data Path
+            try:
+                owner, attr, idx = _resolve(clip)
+                v = float(_get(owner, attr, idx))
+                self.start, self.end = (v * 0.5, v * 1.5) if v else (0.0, 1.0)
+            except Exception:
+                pass
+        return context.window_manager.invoke_props_dialog(self, width=520, title="Wedge Render")
+
+    def draw(self, context):
+        l = self.layout
+        l.prop(self, "data_path")
+        row = l.row(align=True)
+        row.prop(self, "start")
+        row.prop(self, "end")
+        row = l.row(align=True)
+        row.prop(self, "count")
+        row.prop(self, "columns")
+        l.prop(self, "percent", slider=True)
+        from .paths import output_dir, short
+        l.label(text="Saves to: " + short(output_dir(context.scene, "Wedges"), 60), icon="FILE_FOLDER")
 
     def execute(self, context):
         sc = context.scene
@@ -59,9 +88,15 @@ class ZGK_OT_wedge(bpy.types.Operator):
         except Exception as ex:
             self.report({"ERROR"}, f"Can't use that property: {ex}")
             return {"CANCELLED"}
-        out_dir = bpy.path.abspath("//zgk_wedge") if bpy.data.filepath else os.path.join(
-            os.path.expanduser("~"), "zgk_wedge")
-        os.makedirs(out_dir, exist_ok=True)
+        import time
+        from .paths import output_dir
+        import re
+        tag = re.sub(r"\W+", "_", self.data_path.replace("bpy.data.", "")).strip("_")[-40:]
+        base = output_dir(sc, os.path.join("Wedges", f"{tag}_{time.strftime('%Y%m%d-%H%M%S')}"))
+        out_dir, n = base, 2
+        while os.path.exists(out_dir):
+            out_dir, n = f"{base}_{n}", n + 1
+        os.makedirs(out_dir)
         ims = sc.render.image_settings
         keep = (sc.render.filepath, sc.render.resolution_percentage, ims.file_format)
         keep_media = getattr(ims, "media_type", None)
@@ -84,16 +119,22 @@ class ZGK_OT_wedge(bpy.types.Operator):
             pass
         if muted:
             self.report({"INFO"}, "Animated property: its keys are muted during the wedge")
+        wm = context.window_manager
+        wm.progress_begin(0, len(values))
         try:
             for i, v in enumerate(values):
+                wm.progress_update(i)
                 _set(owner, attr, idx, type(original)(v) if isinstance(original, int) else float(v))
                 sc.render.filepath = os.path.join(out_dir, f"wedge_{i:02d}.png")
                 bpy.ops.render.render(write_still=True)
                 img = bpy.data.images.load(sc.render.filepath, check_existing=False)
-                px = np.array(img.pixels[:], dtype=np.float32).reshape(img.size[1], img.size[0], 4)
+                px = np.empty(img.size[0] * img.size[1] * 4, dtype=np.float32)
+                img.pixels.foreach_get(px)                      # bulk copy: far faster than pixels[:]
+                px = px.reshape(img.size[1], img.size[0], 4)
                 tiles.append(px)
                 bpy.data.images.remove(img)
         finally:
+            wm.progress_end()
             for fc in muted:
                 fc.mute = False
             _set(owner, attr, idx, original)
@@ -123,7 +164,7 @@ class ZGK_OT_wedge(bpy.types.Operator):
             cells.append((x, top - th - lab))
         path = os.path.join(out_dir, "wedge_sheet.png")
         sh = bpy.data.images.new("ZGK_Wedge_Sheet", W, H, alpha=True)
-        sh.pixels[:] = sheet.ravel()
+        sh.pixels.foreach_set(sheet.ravel())
         sh.filepath_raw = path
         sh.file_format = "PNG"
         sh.save()
@@ -131,6 +172,7 @@ class ZGK_OT_wedge(bpy.types.Operator):
         self._burn_text(path, W, H, head, cells, values)
         with open(os.path.join(out_dir, "wedge_values.txt"), "w") as fh:
             fh.write(f"{self.data_path}\n" + "\n".join(f"{i:02d}: {v:.6g}" for i, v in enumerate(values)))
+        sc.zgk_last_sheet = path
         self.report({"INFO"}, f"Contact sheet: {path}")
         return {"FINISHED"}
 

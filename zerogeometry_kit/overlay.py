@@ -77,11 +77,34 @@ def _text(font, txt, x, y, size, color):
     blf.draw(font, txt)
 
 
+_beat_cache = {}
+
+
+def _beats(sc):
+    """Beat frames, cached until the markers change (the overlay redraws constantly)."""
+    key = (sc.name, len(sc.timeline_markers))
+    hit = _beat_cache.get(key)
+    if hit is None:
+        from .beat import beat_frames
+        hit = beat_frames(sc)
+        _beat_cache.clear()
+        _beat_cache[key] = hit
+    return hit
+
+
 def draw():
-    context = bpy.context
-    sc = context.scene
+    sc = bpy.context.scene
     if not getattr(sc, "zgk_overlay", False):
         return
+    try:
+        _draw(bpy.context, sc)
+    except Exception as ex:                      # never break the viewport
+        print("ZeroGeometry Kit overlay:", ex)
+    finally:
+        gpu.state.blend_set("NONE")
+
+
+def _draw(context, sc):
     fr = camera_frame_px(context)
     if fr is None:
         return
@@ -128,13 +151,13 @@ def draw():
     _text(f.get("bold", 0), "GEOMETRY", bx + 10 * u + zw, by + 6 * u, fs, (1, 1, 1, 1))
     _text(f.get("mono", 0), fmt, bx + 10 * u + zw + gw + 12 * u, by + 6 * u, fs, (*LIME, 1.0))
     # beat pulse: the zerogeometry.com lime dot, bright on the beat, fading over 6 frames
-    from .beat import beat_frames
-    beats = beat_frames(sc)
+    beats = _beats(sc)
     if beats:
+        import bisect
         cur = sc.frame_current
-        past = [b for b in beats if b <= cur]
-        if past:
-            age = cur - past[-1]
+        i = bisect.bisect_right(beats, cur)
+        if i:
+            age = cur - beats[i - 1]
             a = max(0.0, 1.0 - age / 6.0)
             rad = (7 + 7 * a) * u
             cx, cy = x1 - 19 * u, y0 + 19 * u                 # bottom-right, opposite the badge
@@ -143,13 +166,13 @@ def draw():
             batch = batch_for_shader(shader, "TRI_FAN", {"pos": [(cx, cy)] + pts + [pts[0]]})
             shader.uniform_float("color", (*LIME, 0.25 + 0.75 * a))
             batch.draw(shader)
-    gpu.state.blend_set("NONE")
 
 
 class ZGK_OT_overlay_toggle(bpy.types.Operator):
-    """Toggle the ZeroGeometry camera overlay (safe zones, format badge, beat pulse)"""
+    """Camera Guides: drawn in camera view only, never rendered. Shows the format badge, the
+TikTok/Reels/Shorts safe area (when a platform is picked) and a lime dot that pulses on every beat"""
     bl_idname = "zgk.overlay_toggle"
-    bl_label = "ZG Overlay"
+    bl_label = "Camera Guides"
 
     def execute(self, context):
         context.scene.zgk_overlay = not context.scene.zgk_overlay

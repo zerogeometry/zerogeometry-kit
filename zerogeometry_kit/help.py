@@ -1,38 +1,44 @@
-"""In-app tutorial text: a Quick Start section and per-tool help popups (the '?' buttons)."""
+"""In-app help: '?' popups per section, the Quick Start list, the bundled guide page and the website link."""
+import os
 import bpy
 from bpy.props import StringProperty
 
-DOCS_URL = "https://github.com/zerogeometry/zerogeometry-kit#readme"
+VERSION = "1.0.0"
+WEBSITE = "https://zerogeometry.com"
+GUIDE = os.path.join(os.path.dirname(__file__), "assets", "guide.html")
 
 # short lines: Blender labels don't wrap, so keep every line sidebar-width
 HELP = {
     "QUICKSTART": ("Quick Start", [
         "1  Build your shot in 16:9 as usual.",
-        "2  Reframe > 9:16 makes a vertical copy",
-        "    of the scene (your original is safe).",
+        "2  Click 9:16. A vertical copy of the",
+        "    scene is made; your original is safe.",
         "3  Pick your product as the Subject,",
         "    then Auto-Follow keeps it in frame.",
         "4  TikTok / Reels / Shorts shows where",
         "    the app's buttons cover the video.",
         "5  Render All Formats exports every",
-        "    version as MP4 into //zgk_renders.",
-        "",
-        "Tip: look through the camera (Numpad 0)",
-        "to see the ZeroGeometry overlay.",
+        "    version as MP4 to your Export Folder.",
     ]),
     "REFRAME": ("Vertical Reframe", [
         "9:16 / 4:5 / 1:1 duplicate the scene and",
         "re-fit every camera lens (animated zooms",
         "and beat-cut cameras included).",
-        "Zoom In / Out nudges all lenses 10%.",
+        "Switch versions with the buttons on top.",
         "",
-        "Auto-Follow: set Object (or Collection).",
-        "It keys lens shift + zoom per frame so the",
-        "subject stays inside the frame, or inside",
-        "the platform safe box when one is active.",
-        "Fill frame: also zooms IN so a small",
-        "subject fills the safe box.",
-        "X = Clear Follow, back to the original lens.",
+        "Auto-Follow keys lens shift + zoom on",
+        "every frame so the subject stays inside",
+        "the frame (or the platform safe area).",
+        "Fill frame also zooms IN on small subjects.",
+        "X restores the original lens.",
+    ]),
+    "GUIDES": ("Camera Guides", [
+        "Drawn in camera view only, never rendered.",
+        "  ZERO GEOMETRY badge: the frame format.",
+        "  Lime box: TikTok / Reels / Shorts safe",
+        "  area. Keep text and product inside it.",
+        "  Lime dot: pulses on every beat marker.",
+        "Use the eye button to look through the camera.",
     ]),
     "BEAT": ("Beat Sync", [
         "Detect Beats: pick an mp3/wav. Adds a",
@@ -41,24 +47,27 @@ HELP = {
         "Tempo ½ / x2 if it found half/double time.",
         "",
         "Select objects, then Squash / Hop / Light /",
-        "Glow to key a pulse on the beat (redo panel:",
-        "every N beats, amount, decay, stagger).",
-        "Select cameras > Camera Cuts on Beats.",
+        "Glow keys a pulse on every beat. Tweak it",
+        "in the redo panel (bottom-left corner).",
+        "Select 2+ cameras > Camera Cuts on Beats.",
     ]),
     "LOOP": ("Loop Doctor", [
         "Set the frame range to one loop first.",
         "Check Loop lists curves that don't end",
-        "where they start, and video textures that",
-        "will freeze (frame-offset bug).",
+        "where they start, and video textures",
+        "that will freeze.",
         "Fix Loop: Close (key the start value one",
         "frame after the end), Cycles, or both.",
+        "Works on the selection, or everything",
+        "when nothing is selected.",
     ]),
     "WEDGE": ("Wedge Batch", [
         "Right-click any number field >",
         "Copy Full Data Path, then Wedge Render",
-        "and paste it. Choose From / To / Steps.",
-        "Renders one still per value and saves a",
-        "labelled contact sheet in //zgk_wedge.",
+        "(the path is pasted for you).",
+        "Choose From / To / Steps: one still per",
+        "value + a labelled contact sheet in",
+        "your Export Folder > Wedges.",
     ]),
 }
 
@@ -78,7 +87,7 @@ class ZGK_OT_help(bpy.types.Operator):
         return {"FINISHED"}
 
     def invoke(self, context, event):
-        return context.window_manager.invoke_popup(self, width=330)
+        return context.window_manager.invoke_popup(self, width=340)
 
     def draw(self, context):
         title, lines = HELP.get(self.topic, HELP["QUICKSTART"])
@@ -87,14 +96,25 @@ class ZGK_OT_help(bpy.types.Operator):
         col = l.column(align=True)
         for line in lines:
             col.label(text=line)
-        l.operator("wm.url_open", text="Full guide", icon="URL").url = DOCS_URL
+        row = l.row(align=True)
+        row.operator("zgk.open_guide", text="Full Guide", icon="HELP")
+        row.operator("wm.url_open", text="zerogeometry.com", icon="URL").url = WEBSITE
+
+
+class ZGK_OT_open_guide(bpy.types.Operator):
+    """Open the ZeroGeometry Kit guide (works offline, it ships with the add-on)"""
+    bl_idname = "zgk.open_guide"
+    bl_label = "Open Guide"
+
+    def execute(self, context):
+        bpy.ops.wm.url_open(url="file:///" + GUIDE.replace(os.sep, "/"))
+        return {"FINISHED"}
 
 
 def draw_quickstart(layout):
     col = layout.column(align=True)
     for line in HELP["QUICKSTART"][1]:
         col.label(text=line)
-    layout.operator("wm.url_open", text="Full guide", icon="URL").url = DOCS_URL
 
 
-classes = (ZGK_OT_help,)
+classes = (ZGK_OT_help, ZGK_OT_open_guide)

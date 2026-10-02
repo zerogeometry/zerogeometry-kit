@@ -127,15 +127,21 @@ for s in bpy.data.scenes:
     s.render.engine = "BLENDER_WORKBENCH"; s.render.resolution_percentage = 10; s.frame_end = 6
 if bpy.context.window: bpy.context.window.scene = master
 bpy.ops.wm.save_as_mainfile(filepath=os.path.join(OUT, "fmt_test.blend"))
-for f in glob.glob(os.path.join(OUT, "zgk_renders", "*")): os.remove(f)
+RDIR = os.path.join(OUT, "ZeroGeometry Exports", "Renders")
+for f in glob.glob(os.path.join(RDIR, "*")): os.remove(f)
+before = {s.name: (s.render.image_settings.file_format, s.render.filepath, s.render.resolution_x) for s in bpy.data.scenes}
 bpy.ops.zgk.render_formats()
-mp4s = sorted(glob.glob(os.path.join(OUT, "zgk_renders", "*.mp4")))
+after = {s.name: (s.render.image_settings.file_format, s.render.filepath, s.render.resolution_x) for s in bpy.data.scenes}
+check("render all formats restores your render settings", before == after)
+mp4s = sorted(glob.glob(os.path.join(RDIR, "*.mp4")))
 sizes = []
 for m in mp4s:
     r = subprocess.run(["ffprobe", "-v", "error", "-show_entries", "stream=width,height", "-of", "csv=p=0", m],
                        capture_output=True, text=True).stdout.strip().splitlines()
     sizes.append(r[0] if r else "?")
-check("render all formats -> 4 mp4s", len(mp4s) == 4, " | ".join(f"{os.path.basename(m)}={s}" for m, s in zip(mp4s, sizes)))
+names = sorted(os.path.basename(m) for m in mp4s)
+check("render all formats -> 4 cleanly named mp4s",
+      names == ["Scene_16x9.mp4", "Scene_1x1.mp4", "Scene_4x5.mp4", "Scene_9x16.mp4"], " | ".join(f"{os.path.basename(m)}={s}" for m, s in zip(mp4s, sizes)))
 
 # ---------- 6. real song
 if args and os.path.exists(args[0]):
@@ -150,7 +156,8 @@ if args and os.path.exists(args[0]):
 
 # ---------- 7. wedge brand sheet
 bpy.ops.zgk.wedge(data_path='bpy.data.objects["Product"].location[2]', start=0, end=1, count=4, percent=10, columns=2)
-sheet = os.path.join(OUT, "zgk_wedge", "wedge_sheet.png")
+sheet = bpy.context.scene.zgk_last_sheet
+check("wedge sheet lands in the export folder", sheet.startswith(os.path.join(OUT, "ZeroGeometry Exports", "Wedges")), sheet)
 img = bpy.data.images.load(sheet)
 import numpy as np
 px = np.array(img.pixels[:]).reshape(img.size[1], img.size[0], 4)
@@ -160,8 +167,9 @@ check("wedge sheet has ZeroGeometry header rule", len(lime_rows) >= 2, f"{img.si
 # ---------- 8. wedge an ANIMATED property: keys must not override the wedge values
 bpy.ops.zgk.wedge(data_path='bpy.data.objects["Product"].location[1]', start=-1.5, end=1.5, count=3,
                   percent=10, columns=3)
-a = bpy.data.images.load(os.path.join(OUT, "zgk_wedge", "wedge_00.png"))
-b = bpy.data.images.load(os.path.join(OUT, "zgk_wedge", "wedge_02.png"))
+wdir = os.path.dirname(bpy.context.scene.zgk_last_sheet)
+a = bpy.data.images.load(os.path.join(wdir, "wedge_00.png"))
+b = bpy.data.images.load(os.path.join(wdir, "wedge_02.png"))
 diff = float(np.abs(np.array(a.pixels[:]) - np.array(b.pixels[:])).mean())
 prod = bpy.data.objects["Product"]
 still_animated = all(not fc.mute for fc in zgk.beat._fcurves(prod))

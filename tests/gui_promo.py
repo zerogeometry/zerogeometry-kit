@@ -10,7 +10,7 @@ args = sys.argv[sys.argv.index("--") + 1:]
 SHOT, OUT = args[0], args[1]
 DEMO = os.path.dirname(bpy.data.filepath)
 log = lambda *a: print("PROMO", *a)
-ORDER = ["ZGK_PT_reframe", "ZGK_PT_beat", "ZGK_PT_loop", "ZGK_PT_wedge", "ZGK_PT_quickstart"]
+ORDER = ["ZGK_PT_reframe", "ZGK_PT_beat", "ZGK_PT_loop", "ZGK_PT_wedge"]
 
 
 def panels(open_set):
@@ -21,6 +21,9 @@ def panels(open_set):
     for c in classes:
         c.bl_options = set() if c.bl_idname in open_set else {"DEFAULT_CLOSED"}
         bpy.utils.register_class(c)
+    about = bpy.types.ZGK_PT_about                       # keep the footer last
+    bpy.utils.unregister_class(about)
+    bpy.utils.register_class(about)
 
 
 def view3d():
@@ -81,7 +84,7 @@ def setup():
         select(set())
         sc.frame_set(1)
     elif SHOT == "help":
-        panels({"ZGK_PT_quickstart"})
+        panels({"ZGK_PT_reframe"})
         sc.frame_set(60)
     frame_camera(area)
     return None
@@ -90,13 +93,16 @@ def setup():
 def shoot():
     area = view3d()
     for r in area.regions:
-        if r.type == "UI" and hasattr(r, "active_panel_category"):
-            r.active_panel_category = "ZeroGeometry"
-            r.tag_redraw()
+        if r.type == "UI":
+            try:
+                r.active_panel_category = "ZeroGeometry"
+                r.tag_redraw()
+            except AttributeError:
+                pass
     if SHOT == "help":
         win = [r for r in area.regions if r.type == "WINDOW"][0]
         with bpy.context.temp_override(area=area, region=win):
-            bpy.ops.zgk.help("INVOKE_DEFAULT", topic="REFRAME")
+            bpy.ops.zgk.help("INVOKE_DEFAULT", topic="QUICKSTART")
 
     def snap():
         bpy.ops.screen.screenshot(filepath=OUT)

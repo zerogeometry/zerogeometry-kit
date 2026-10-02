@@ -1,45 +1,44 @@
 # ZeroGeometry Kit
 
 Social-video tools for Blender 4.2+ (tested on 5.2). Make one great 16:9 animation, then ship it everywhere.
+By [ZeroGeometry](https://zerogeometry.com).
 
-**Panel:** 3D Viewport → Sidebar (`N`) → **ZeroGeometry**
+**Panel:** 3D Viewport → Sidebar (`N`) → **ZeroGeometry**. Every section has a **?** button, and a full offline guide ships with the add-on (**Guide** button).
 
-## Vertical Reframe (the flagship)
-Turn a finished 16:9 scene into real **9:16 / 4:5 / 1:1** versions. The camera is reframed, not the video cropped.
-- **Reframe Scene:** makes a copy of the scene in the new format and rescales every lens, including animated zooms and every camera used in beat cuts.
-- **Make All Social Formats:** creates 9:16, 4:5 and 1:1 copies in one click.
-- **Auto-Follow Subject:** pick your product (an object or a whole collection). It keys the camera's lens shift, and optionally its zoom, on every frame so the subject stays centred and fully inside the tall frame, with smoothing. Like Auto Reframe, but it knows exactly where your 3D subject is, so it never guesses.
-- **Social Safe Zones:** a ZeroGeometry camera overlay showing the real, asymmetric areas that TikTok / Reels / Shorts cover (right-hand buttons, caption bar), with a lime "safe" box. Auto-Follow can aim for the centre of that box.
-- **Clear Follow:** removes the follow keys and restores every camera's original (even animated) lens. Re-running Auto-Follow never stacks zoom.
-- **Render All Formats:** renders the master scene and every reframed copy to H.264 MP4 (with the music if the scene has a sound strip). It handles odd pixel sizes, such as 4:5 at preview percentages, automatically.
+## Vertical Reframe
+- **9:16 / 4:5 / 1:1:** each click makes a real reframed copy of your scene with every camera lens re-fitted, including animated zooms and beat-cut cameras. It's always built from your original, and clicking a format that already exists just switches to it. **All Three** makes every format at once.
+- **Version switcher:** the 16:9 · 9:16 · 4:5 · 1:1 buttons at the top of the panel jump between versions.
+- **Auto-Follow Subject:** pick your product (an object or a collection) and it keys lens shift and zoom on every frame so the product stays inside the frame. **Fill frame** also zooms in on small subjects. **X** restores the original lens, and re-running never stacks.
+- **TikTok / Reels / Shorts:** shows the real, asymmetric areas the app UI covers. Auto-Follow then centres the product in the safe area.
+- **Render All Formats:** exports the original and every version as H.264 MP4 (with the scene's audio) named `Scene_9x16.mp4` and so on. Your own render settings are restored afterwards.
 
-## The ZeroGeometry overlay
-In camera view: the platform safe zones, a ZERO **GEOMETRY** format badge, and a lime dot that pulses on every beat marker. Toggle it with **Overlay** in the panel header.
+## Camera Guides
+Drawn in camera view only, never rendered: a ZERO **GEOMETRY** format badge, the platform safe area, and a lime dot that pulses on every beat marker. The eye button jumps to camera view.
 
 ## Beat Sync
-- **Detect Beats:** analyses a music file (tempo plus beat phase), adds a marker on every beat and adds the sound strip.
-- **Beat Grid:** markers from a known BPM.
-- **Tempo ½ / x2:** halve or double the detected tempo when a track is read in half-time (e.g. 70 vs 140 BPM drill).
-- **Key Pulses to Beats:** squash bounce, hop, light flash or emission flash on the selected objects, every N beats, with stagger.
-- **Camera Cuts on Beats:** select cameras and it cuts between them every N beats (camera-bound markers, so there are no motion-blur smears across cuts).
+- **Detect Beats** (mp3 / wav / flac / ogg / m4a): tempo and beat phase, a marker on every beat, and the track added as a sound strip. Re-running replaces it rather than stacking.
+- **BPM Grid**, plus **Tempo ½ / ×2**.
+- **Squash / Hop / Light / Glow:** keys a pulse on the selected objects every N beats (redo panel: amount, decay, stagger).
+- **Camera Cuts on Beats:** select two or more cameras and it cuts between them on the beat.
 
 ## Loop Doctor
-- **Check Loop:** lists every curve that doesn't return to its start value, and every movie texture that will freeze. This includes the classic *frame-offset* bug, where Blender applies the offset after wrapping, so late frames hold on the last frame.
-- **Fix Loop:** closes the curves, adds a Cycles modifier, or both, and repairs movie textures.
-- **Set Loop Range:** sets the scene length to a whole number of loops.
+**Check** lists every curve that doesn't end where it starts, and every video texture that will freeze. **Fix** closes them (or adds Cycles). A full 360° spin counts as closed. Works on the selection, or on everything when nothing is selected.
 
 ## Wedge Batch
-Houdini-style wedging. Sweep any property (right-click → *Copy Full Data Path*) across N values, render a still for each, and get one **contact sheet** plus a values list.
+Houdini-style wedging. Copy any number field's data path, click **Wedge Render** (the path is pasted for you), and get one still per value plus a branded, labelled contact sheet.
 
-See **TUTORIAL.md** for a step-by-step guide. Promo screenshots are in `promo/`; the demo scene is in `demo/`.
+## Where files go
+Everything is saved to the **Export Folder** shown in the panel. The default is `ZeroGeometry Exports/` next to your .blend; if the file hasn't been saved yet, it's `Videos/ZeroGeometry Exports`. Inside: `Renders/` and `Wedges/<property>_<time>/`. Use **Open** to view it, or the folder button to choose another location.
 
 ## Install
-Download `zerogeometry_kit-<version>.zip`, then in Blender go to **Edit → Preferences → Get Extensions → ⌄ → Install from Disk**.
+In Blender: **Edit → Preferences → Get Extensions → ⌄ → Install from Disk**, then pick `zerogeometry_kit-1.0.0.zip`. Try it on `demo/zgk_demo.blend`, an original scene with a royalty-free generated beat.
 
 ## Develop / test
 ```
-blender -b --factory-startup -P tests/test_headless.py
+blender -b --factory-startup -P tests/test_headless.py      # 12 checks
+blender -b --factory-startup -P tests/test_more.py -- song.mp3   # 16 checks
+blender demo/zgk_demo.blend -P tests/gui_handtest.py -- out_dir  # 25 checks, real UI
 blender --command extension build --source-dir zerogeometry_kit --output-dir dist
 ```
 
-GPL-3.0-or-later.
+GPL-3.0-or-later. Fonts: Poppins and IBM Plex Mono (SIL Open Font License, included).

@@ -105,6 +105,7 @@ class ZGK_OT_beat_detect(bpy.types.Operator):
     bl_options = {"REGISTER", "UNDO"}
 
     filepath: StringProperty(subtype="FILE_PATH")
+    filter_glob: StringProperty(default="*.mp3;*.wav;*.flac;*.ogg;*.m4a;*.aac", options={"HIDDEN"})
     bpm_hint: FloatProperty(name="BPM (0 = auto)", default=0.0, min=0.0, max=300.0)
     add_sound: BoolProperty(name="Add sound strip", default=True)
     offset_frames: IntProperty(name="Start frame", default=1)
@@ -131,7 +132,12 @@ class ZGK_OT_beat_detect(bpy.types.Operator):
                 sc.sequence_editor_create()
             se = sc.sequence_editor
             coll = se.strips if hasattr(se, "strips") else se.sequences     # 4.4+ renamed it
-            coll.new_sound("ZeroGeometry Kit Audio", bpy.path.abspath(self.filepath), 1, self.offset_frames)
+            for old in [st for st in coll if st.get("zgk_audio")]:         # re-running replaces our track
+                coll.remove(old)
+            used = {st.channel for st in coll}
+            ch = next(c for c in range(1, 128) if c not in used)
+            strip = coll.new_sound("ZG Beat Track", bpy.path.abspath(self.filepath), ch, self.offset_frames)
+            strip["zgk_audio"] = True
         self.report({"INFO"}, f"{len(times)} beats at {bpm:.1f} BPM")
         return {"FINISHED"}
 
@@ -177,6 +183,16 @@ class ZGK_OT_beat_key(bpy.types.Operator):
     decay: IntProperty(name="Decay frames", default=6, min=1)
     stagger: IntProperty(name="Stagger frames", default=0, min=0,
                          description="Offset each selected object by this many frames")
+
+    @classmethod
+    def poll(cls, context):
+        if not context.selected_objects:
+            cls.poll_message_set("Select the objects to pulse")
+            return False
+        if not beat_frames(context.scene):
+            cls.poll_message_set("Add beats first (Detect Beats or Beat Grid)")
+            return False
+        return True
 
     def execute(self, context):
         beats = beat_frames(context.scene)[::self.every]
@@ -236,6 +252,16 @@ class ZGK_OT_beat_cuts(bpy.types.Operator):
 
     every: IntProperty(name="Cut every N beats", default=2, min=1)
 
+    @classmethod
+    def poll(cls, context):
+        if sum(o.type == "CAMERA" for o in context.selected_objects) < 2:
+            cls.poll_message_set("Select two or more cameras")
+            return False
+        if not beat_frames(context.scene):
+            cls.poll_message_set("Add beats first (Detect Beats or Beat Grid)")
+            return False
+        return True
+
     def execute(self, context):
         sc = context.scene
         cams = sorted((o for o in context.selected_objects if o.type == "CAMERA"), key=lambda o: o.name)
@@ -253,7 +279,7 @@ class ZGK_OT_beat_cuts(bpy.types.Operator):
 
 
 class ZGK_OT_beat_tempo(bpy.types.Operator):
-    """Double or halve the detected tempo (e.g. a 70 BPM half-time read of a 140 BPM drill track)"""
+    """Double or halve the detected tempo (e.g. it found 70 BPM but the song feels like 140)"""
     bl_idname = "zgk.beat_tempo"
     bl_label = "Tempo x2 / ½"
     bl_options = {"REGISTER", "UNDO"}

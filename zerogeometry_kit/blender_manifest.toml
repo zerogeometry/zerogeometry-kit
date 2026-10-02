@@ -1,12 +1,12 @@
 schema_version = "1.0.0"
 
 id = "zerogeometry_kit"
-version = "0.2.0"
+version = "1.0.0"
 name = "ZeroGeometry Kit"
-tagline = "Beat sync, perfect loops, vertical reframing and wedge renders"
+tagline = "Vertical reframing, beat sync, perfect loops and wedge renders"
 maintainer = "ZeroGeometry"
 type = "add-on"
-website = "https://github.com/"
+website = "https://zerogeometry.com"
 
 tags = ["Animation", "Render", "Camera"]
 
@@ -15,4 +15,4 @@ blender_version_min = "4.2.0"
 license = ["SPDX:GPL-3.0-or-later"]
 
 [permissions]
-files = "Read audio files for beat detection and write wedge renders"
+files = "Read audio for beats, save renders to your export folder"

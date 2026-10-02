@@ -4,6 +4,7 @@ original edit is untouched."""
 import bpy
 from bpy.props import EnumProperty, FloatProperty, BoolProperty, IntProperty
 from .beat import _fcurves
+from .paths import output_dir, format_label
 
 ASPECTS = {
     "9x16": (1080, 1920, "Reels / TikTok / Shorts"),
@@ -54,12 +55,32 @@ class ZGK_OT_reframe(bpy.types.Operator):
     subject_width: FloatProperty(name="Subject width", default=0.6, min=0.05, max=1.0,
                                  description="How much of the original frame width your subject spans")
     copy_scene: BoolProperty(name="Work on a copy", default=True)
-    percent: IntProperty(name="Resolution %", default=100, min=10, max=200)
+    percent: IntProperty(name="Resolution %", default=0, min=0, max=200,
+                         description="0 = keep the original scene's resolution %")
+
+    @classmethod
+    def poll(cls, context):
+        if not context.scene.camera:
+            cls.poll_message_set("Add a camera to the scene first")
+            return False
+        return True
 
     def execute(self, context):
         src = context.scene
-        sw, sh = src.render.resolution_x, src.render.resolution_y
         dw, dh, _ = ASPECTS[self.aspect]
+        if self.copy_scene:
+            # always build new formats from the ORIGINAL scene, never from another reframed copy
+            master = bpy.data.scenes.get(src.get("zgk_source", src.name), src)
+            existing = next((s for s in family(master) if format_label(s) == self.aspect), None)
+            if existing is not None:
+                if context.window:
+                    context.window.scene = existing
+                self.report({"INFO"}, f"{existing.name} already exists: switched to it")
+                return {"FINISHED"}
+            if context.window and context.window.scene != master:
+                context.window.scene = master
+            src = master
+        sw, sh = src.render.resolution_x, src.render.resolution_y
         if self.copy_scene:
             bpy.ops.scene.new(type="FULL_COPY")
             sc = context.scene
@@ -73,7 +94,8 @@ class ZGK_OT_reframe(bpy.types.Operator):
             sc = src
         k = self.zoom or suggested_zoom(sw, sh, dw, dh, self.subject_width)
         sc.render.resolution_x, sc.render.resolution_y = dw, dh
-        sc.render.resolution_percentage = self.percent
+        if self.percent:
+            sc.render.resolution_percentage = self.percent
         cams = {sc.camera} if sc.camera else set()
         cams |= {m.camera for m in sc.timeline_markers if m.camera}     # beat-cut cameras too
         done = set()
@@ -186,6 +208,9 @@ class ZGK_OT_reframe_follow(bpy.types.Operator):
         if not (sc.zgk_subject or sc.zgk_subject_collection):
             self.report({"ERROR"}, "Pick a subject object or collection first")
             return {"CANCELLED"}
+        if not _subject_points(context):
+            self.report({"ERROR"}, "The subject has no geometry to follow")
+            return {"CANCELLED"}
         # every camera this scene cuts to (beat cuts bind cameras to markers)
         cams = {sc.camera} | {m.camera for m in sc.timeline_markers if m.camera}
         for c in cams:
@@ -206,8 +231,10 @@ class ZGK_OT_reframe_follow(bpy.types.Operator):
         frames = list(range(sc.frame_start, sc.frame_end + 1))
         per_cam = {}                                         # camera data -> [(frame, sx, sy, lens)]
         f_keep = sc.frame_current
-        pts_world_cache = None
-        for f in frames:
+        wm = context.window_manager
+        wm.progress_begin(0, len(frames))
+        for n_, f in enumerate(frames):
+            wm.progress_update(n_)
             sc.frame_set(f)
             cam = sc.camera
             cd = cam.data
@@ -244,6 +271,7 @@ class ZGK_OT_reframe_follow(bpy.types.Operator):
                     cd.shift_y = b; cd.keyframe_insert("shift_y", frame=f)
                 if zoom:
                     cd.lens = l; cd.keyframe_insert("lens", frame=f)
+        wm.progress_end()
         sc.frame_set(f_keep)
         self.report({"INFO"}, f"Followed subject over {len(frames)} frames on {len(per_cam)} camera(s)")
         return {"FINISHED"}
@@ -270,7 +298,7 @@ class ZGK_OT_reframe_follow_clear(bpy.types.Operator):
 
 # ---------------------------------------------------------------- social safe zones
 class ZGK_OT_safe_zones(bpy.types.Operator):
-    """Show where the platform's buttons and captions cover a vertical video (ZeroGeometry overlay)"""
+    """Show where the platform's buttons and captions cover a vertical video (drawn by Camera Guides)"""
     bl_idname = "zgk.safe_zones"
     bl_label = "Social Safe Zones"
     bl_options = {"REGISTER", "UNDO"}
@@ -308,59 +336,140 @@ class ZGK_OT_reframe_all(bpy.types.Operator):
 
     subject_width: FloatProperty(name="Subject width", default=0.6, min=0.05, max=1.0)
 
+    @classmethod
+    def poll(cls, context):
+        return ZGK_OT_reframe.poll(context)
+
     def execute(self, context):
         src = context.window.scene if context.window else context.scene
         made = []
         for asp in ("9x16", "4x5", "1x1"):
             if context.window:
                 context.window.scene = src
+            before = len(bpy.data.scenes)
             bpy.ops.zgk.reframe(aspect=asp, subject_width=self.subject_width, copy_scene=True)
-            made.append(context.scene.name)
+            if len(bpy.data.scenes) > before:
+                made.append(context.scene.name)
         if context.window:
             context.window.scene = src
-        self.report({"INFO"}, "Created: " + ", ".join(made))
+        self.report({"INFO"}, ("Created: " + ", ".join(made)) if made else "All formats already exist")
         return {"FINISHED"}
 
 
+def family(scene):
+    """The master scene plus every reframed copy of it."""
+    master = scene.get("zgk_source", scene.name)
+    return [s for s in bpy.data.scenes if s.name == master or s.get("zgk_source") == master]
+
+
+class ZGK_OT_goto_scene(bpy.types.Operator):
+    """Switch to this version of the scene"""
+    bl_idname = "zgk.goto_scene"
+    bl_label = "Go to Scene"
+
+    name: bpy.props.StringProperty()
+
+    def execute(self, context):
+        sc = bpy.data.scenes.get(self.name)
+        if sc and context.window:
+            context.window.scene = sc
+        return {"FINISHED"}
+
+
+class ZGK_OT_look_through(bpy.types.Operator):
+    """Look through the scene camera (Numpad 0). The Camera Guides are drawn there"""
+    bl_idname = "zgk.look_through"
+    bl_label = "Camera View"
+
+    def execute(self, context):
+        area = context.area if context.area and context.area.type == "VIEW_3D" else next(
+            (a for a in context.screen.areas if a.type == "VIEW_3D"), None)
+        if area is None or not context.scene.camera:
+            self.report({"WARNING"}, "Needs a 3D Viewport and a scene camera")
+            return {"CANCELLED"}
+        area.spaces.active.region_3d.view_perspective = "CAMERA"
+        win = next(r for r in area.regions if r.type == "WINDOW")
+        with context.temp_override(area=area, region=win):
+            bpy.ops.view3d.view_center_camera()
+        return {"FINISHED"}
+
+
+_RENDER_KEYS = ("filepath", "use_file_extension")
+_FF_KEYS = ("format", "codec", "constant_rate_factor", "audio_codec")
+
+
+def _has_sound(s):
+    se = s.sequence_editor
+    if not se:
+        return False
+    strips = getattr(se, "strips_all", None) or getattr(se, "sequences_all", [])
+    return any(st.type == "SOUND" for st in strips)
+
+
 class ZGK_OT_render_formats(bpy.types.Operator):
-    """Render the animation of this scene and every reframed copy of it to MP4s next to the .blend"""
+    """Render this scene and every reframed version of it to MP4 (H.264, with the scene's audio) into the
+export folder. Your own render settings are restored afterwards"""
     bl_idname = "zgk.render_formats"
     bl_label = "Render All Formats"
 
     def execute(self, context):
         import os
+        scenes = family(context.scene)
+        out_dir = output_dir(context.scene, "Renders", create=True)
         master = context.scene.get("zgk_source", context.scene.name)
-        scenes = [s for s in bpy.data.scenes if s.name == master or s.get("zgk_source") == master]
-        out_dir = bpy.path.abspath("//zgk_renders") if bpy.data.filepath else os.path.join(
-            os.path.expanduser("~"), "zgk_renders")
-        os.makedirs(out_dir, exist_ok=True)
-        done = []
-        for s in scenes:
-            r = s.render
-            if hasattr(r.image_settings, "media_type"):       # Blender 5+: video is its own media type
-                r.image_settings.media_type = "VIDEO"
-            r.image_settings.file_format = "FFMPEG"
-            r.ffmpeg.format = "MPEG4"
-            r.ffmpeg.codec = "H264"
-            r.ffmpeg.constant_rate_factor = "HIGH"
-            r.ffmpeg.audio_codec = "AAC" if s.sequence_editor else "NONE"   # keep the beat-sync music
-            r.filepath = os.path.join(out_dir, s.name + "_")
-            # H.264 needs even pixel sizes: e.g. 4:5 (1080x1350) at 50% = 540x675 would fail.
-            keep_res = (r.resolution_x, r.resolution_y)
-            def eff(v):
-                return int(v * r.resolution_percentage / 100)
-            while eff(r.resolution_x) % 2:
-                r.resolution_x += 1
-            while eff(r.resolution_y) % 2:
-                r.resolution_y += 1
-            try:
-                bpy.ops.render.render(animation=True, scene=s.name)
-            finally:
-                r.resolution_x, r.resolution_y = keep_res
-            done.append(s.name)
-        self.report({"INFO"}, f"Rendered {len(scenes)} format(s) to {out_dir}")
+        wm = context.window_manager
+        wm.progress_begin(0, len(scenes))
+        written = []
+        try:
+            for i, s in enumerate(scenes):
+                wm.progress_update(i)
+                r, ims = s.render, s.render.image_settings
+                keep_r = {k: getattr(r, k) for k in _RENDER_KEYS}
+                keep_ff = {k: getattr(r.ffmpeg, k) for k in _FF_KEYS}
+                keep_media = getattr(ims, "media_type", None)
+                keep_fmt = ims.file_format
+                keep_res = (r.resolution_x, r.resolution_y)
+                try:
+                    if keep_media is not None:               # Blender 5+: video is its own media type
+                        ims.media_type = "VIDEO"
+                    ims.file_format = "FFMPEG"
+                    r.ffmpeg.format = "MPEG4"
+                    r.ffmpeg.codec = "H264"
+                    r.ffmpeg.constant_rate_factor = "HIGH"
+                    r.ffmpeg.audio_codec = "AAC" if _has_sound(s) else "NONE"
+                    r.use_file_extension = True
+                    stem = f"{master}_{format_label(s)}"
+                    r.filepath = os.path.join(out_dir, stem + "_")
+                    # H.264 needs even pixel sizes: e.g. 4:5 (1080x1350) at 50% = 540x675 would fail
+                    pct = r.resolution_percentage / 100
+                    while int(r.resolution_x * pct) % 2:
+                        r.resolution_x += 1
+                    while int(r.resolution_y * pct) % 2:
+                        r.resolution_y += 1
+                    bpy.ops.render.render(animation=True, scene=s.name)
+                    produced = bpy.path.abspath(r.frame_path(frame=s.frame_start))
+                    final = os.path.join(out_dir, stem + ".mp4")
+                    if os.path.exists(produced):
+                        os.replace(produced, final)          # clean name, no frame-range suffix
+                        written.append(final)
+                finally:
+                    for k, v in keep_r.items():
+                        setattr(r, k, v)
+                    if keep_media is not None:
+                        ims.media_type = keep_media
+                    ims.file_format = keep_fmt
+                    for k, v in keep_ff.items():
+                        try:
+                            setattr(r.ffmpeg, k, v)
+                        except Exception:
+                            pass
+                    r.resolution_x, r.resolution_y = keep_res
+        finally:
+            wm.progress_end()
+        context.scene.zgk_last_export = out_dir
+        self.report({"INFO"}, f"{len(written)} MP4(s) saved to {out_dir}")
         return {"FINISHED"}
 
 
-classes = (ZGK_OT_reframe, ZGK_OT_reframe_nudge, ZGK_OT_reframe_follow, ZGK_OT_reframe_follow_clear, ZGK_OT_safe_zones,
-           ZGK_OT_reframe_all, ZGK_OT_render_formats)
+classes = (ZGK_OT_reframe, ZGK_OT_reframe_nudge, ZGK_OT_reframe_follow, ZGK_OT_reframe_follow_clear,
+           ZGK_OT_safe_zones, ZGK_OT_reframe_all, ZGK_OT_render_formats, ZGK_OT_goto_scene, ZGK_OT_look_through)

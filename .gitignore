@@ -1,3 +1,6 @@
 __pycache__/
 *.pyc
 dist/
+handtest/
+ZeroGeometry Exports/
+promo_overview.png

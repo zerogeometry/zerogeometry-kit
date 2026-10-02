@@ -75,18 +75,57 @@ strip.scale = (0.01, 1.4, 0.006)
 strip.data.materials.append(mat("Lime Glow", LIME, emit=12))
 
 
+BODY_H = 0.205
+LOGO_W, LOGO_Z = 0.052, 0.085            # printed mark: width (m) and centre height on the bottle
+
+
+def printed(name, color, rough, coat, logo_png):
+    """Bottle material with the ZG mark printed into it (UV-mapped, follows the curve, same gloss)."""
+    m = bpy.data.materials.new(name)
+    m.use_nodes = True
+    nt = m.node_tree
+    bsdf = nt.nodes["Principled BSDF"]
+    bsdf.inputs["Roughness"].default_value = rough
+    bsdf.inputs["Coat Weight"].default_value = coat
+    uv = nt.nodes.new("ShaderNodeUVMap")
+    mp = nt.nodes.new("ShaderNodeMapping")
+    # front of the bottle is u = 0.5; the label occupies LOGO_W of the circumference around it
+    circ = 2 * math.pi * 0.04
+    du, dv = LOGO_W / circ, LOGO_W / BODY_H
+    mp.inputs["Location"].default_value = (-(0.5 - du / 2) / du, -(LOGO_Z / BODY_H - dv / 2) / dv, 0)
+    mp.inputs["Scale"].default_value = (1 / du, 1 / dv, 1)
+    tex = nt.nodes.new("ShaderNodeTexImage")
+    tex.image = bpy.data.images.load(os.path.join(ASSETS, logo_png), check_existing=True)
+    tex.extension = "CLIP"
+    mix = nt.nodes.new("ShaderNodeMix"); mix.data_type = "RGBA"
+    mix.inputs["A"].default_value = color
+    L = nt.links.new
+    L(uv.outputs["UV"], mp.inputs["Vector"])
+    L(mp.outputs["Vector"], tex.inputs["Vector"])
+    L(tex.outputs["Alpha"], mix.inputs["Factor"])
+    L(tex.outputs["Color"], mix.inputs["B"])
+    L(mix.outputs["Result"], bsdf.inputs["Base Color"])
+    return m
+
+
 def bottle(name, body, cap, y):
-    """Original product: rounded bottle + cap + ZG decal. Front faces +X."""
+    """Original product: rounded bottle + cap, ZG mark printed in its material. Front faces +X."""
     prof = [(0, 0), (0.033, 0), (0.038, 0.004), (0.04, 0.012), (0.04, 0.14), (0.036, 0.165),
             (0.024, 0.185), (0.014, 0.195), (0.014, 0.205), (0, 0.205)]
     bm = bmesh.new()
     seg = 96
-    ring = [[bm.verts.new((r * math.cos(2 * math.pi * i / seg), r * math.sin(2 * math.pi * i / seg), z))
+    # angle starts at -pi so the front (+X) sits at u = 0.5, far from the UV seam at the back
+    ring = [[bm.verts.new((r * math.cos(2 * math.pi * i / seg - math.pi),
+                           r * math.sin(2 * math.pi * i / seg - math.pi), z))
              for i in range(seg)] for r, z in prof]
+    uvl = bm.loops.layers.uv.new("UVMap")
     for p in range(len(prof) - 1):
         for i in range(seg):
             j = (i + 1) % seg
             f = bm.faces.new((ring[p][i], ring[p][j], ring[p + 1][j], ring[p + 1][i])); f.smooth = True
+            for loop, u, z in zip(f.loops, (i / seg, (i + 1) / seg, (i + 1) / seg, i / seg),
+                                  (prof[p][1], prof[p][1], prof[p + 1][1], prof[p + 1][1])):
+                loop[uvl].uv = (u, z / BODY_H)
     bmesh.ops.remove_doubles(bm, verts=bm.verts, dist=1e-7)
     me = bpy.data.meshes.new(name); bm.to_mesh(me); bm.free()
     ob = bpy.data.objects.new(name, me); col.objects.link(ob)
@@ -96,26 +135,12 @@ def bottle(name, body, cap, y):
     c = bpy.context.object; c.name = name + " Cap"; c.parent = ob
     bpy.ops.object.shade_smooth(); c.data.materials.append(cap)
     c.modifiers.new("Bevel", "BEVEL").width = 0.003
-    # ZG decal on the front
-    bpy.ops.mesh.primitive_plane_add(size=0.05, location=(0.0402, 0, 0.085), rotation=(math.pi / 2, 0, math.pi / 2))
-    d = bpy.context.object; d.name = name + " ZG"; d.parent = ob
-    dm = bpy.data.materials.new(name + " ZG Mark"); dm.use_nodes = True
-    if hasattr(dm, "surface_render_method"):
-        dm.surface_render_method = "BLENDED"
-    nt = dm.node_tree; bsdf = nt.nodes["Principled BSDF"]
-    tex = nt.nodes.new("ShaderNodeTexImage")
-    tex.image = bpy.data.images.load(os.path.join(ASSETS, "zg_icon_lime.png" if body.name != "Lime Gloss" else "zg_icon_white.png"))
-    nt.links.new(tex.outputs["Color"], bsdf.inputs["Base Color"])
-    nt.links.new(tex.outputs["Color"], bsdf.inputs["Emission Color"])
-    bsdf.inputs["Emission Strength"].default_value = 0.6
-    nt.links.new(tex.outputs["Alpha"], bsdf.inputs["Alpha"])
-    d.data.materials.append(dm)
     return ob
 
 
-black = mat("Matte Black", srgb("#111111"), rough=0.55)
-white = mat("Soft White", WHITE, rough=0.3, coat=0.5)
-lime = mat("Lime Gloss", LIME, rough=0.25, coat=0.8)
+black = printed("Matte Black", srgb("#111111"), 0.55, 0.0, "zg_icon_lime.png")
+white = printed("Soft White", WHITE, 0.3, 0.5, "zg_icon_lime.png")
+lime = printed("Lime Gloss", LIME, 0.25, 0.8, "zg_icon_white.png")
 capl = mat("Cap Lime", LIME, rough=0.3, metal=0.3)
 capb = mat("Cap Black", srgb("#0D0D0D"), rough=0.2, metal=0.8)
 products = bpy.data.collections.new("Products")
