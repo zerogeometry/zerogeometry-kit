@@ -1,4 +1,4 @@
-"""Launch the real Blender UI with the add-on, set up a 9:16 product shot, open the ZeroGeometry sidebar
+"""Launch the real Blender UI with the add-on, set up a 9:16 product shot, open the Social Video sidebar
 and camera view with the overlay, then save a screenshot and quit.
 blender --factory-startup -P tests/gui_screenshot.py -- <out.png>
 """
@@ -7,8 +7,8 @@ import bpy
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
-import zerogeometry_kit as zgk
-zgk.register()
+import social_video_kit as svk
+svk.register()
 OUT = sys.argv[sys.argv.index("--") + 1] if "--" in sys.argv else os.path.join(ROOT, "ui.png")
 
 
@@ -27,12 +27,12 @@ def setup():
     sc.collection.objects.link(cam)
     cam.location = (7, 0, 1.4); cam.rotation_euler = (math.radians(84), 0, math.radians(90)); cam.data.lens = 40
     sc.camera = cam
-    bpy.ops.zgk.beat_grid(bpm=120)
-    bpy.ops.zgk.reframe(aspect="9x16", copy_scene=True)
+    bpy.ops.svk.beat_grid(bpm=120)
+    bpy.ops.svk.reframe(aspect="9x16", copy_scene=True)
     v = bpy.context.scene
-    v.zgk_subject = next(o for o in v.objects if o.name.startswith("Product"))
-    bpy.ops.zgk.safe_zones(platform="TIKTOK")
-    bpy.ops.zgk.reframe_follow(use_safe_zone=True)
+    v.svk_subject = next(o for o in v.objects if o.name.startswith("Product"))
+    bpy.ops.svk.safe_zones(platform="ALL")
+    bpy.ops.svk.reframe_follow(use_safe_zone=True)
     v.frame_set(2)
     for area in bpy.context.screen.areas:
         if area.type == "VIEW_3D":
@@ -44,7 +44,7 @@ def setup():
             for region in area.regions:
                 if region.type == "UI":
                     try:
-                        region.active_panel_category = "ZeroGeometry"
+                        region.active_panel_category = "Social Video"
                     except Exception:
                         pass
             with bpy.context.temp_override(area=area, region=[r for r in area.regions if r.type == "WINDOW"][0]):
@@ -57,7 +57,7 @@ def shoot():
         if area.type == "VIEW_3D":
             for region in area.regions:
                 if region.type == "UI" and hasattr(region, "active_panel_category"):
-                    region.active_panel_category = "ZeroGeometry"
+                    region.active_panel_category = "Social Video"
                     region.tag_redraw()
     bpy.app.timers.register(lambda: (bpy.ops.screen.screenshot(filepath=OUT), print("SCREENSHOT", OUT),
                                      bpy.ops.wm.quit_blender()) and None, first_interval=1.0)

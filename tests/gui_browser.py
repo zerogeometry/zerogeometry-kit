@@ -1,10 +1,10 @@
 """Open Detect Beats like a click (file browser), screenshot it, then finish it as the user would by
-picking the demo beat track. blender demo/zgk_demo.blend -P tests/gui_browser.py -- <out.png>"""
+picking the demo beat track. blender demo/svk_demo.blend -P tests/gui_browser.py -- <out.png>"""
 import os, sys
 import bpy
 
 OUT = sys.argv[sys.argv.index("--") + 1]
-WAV = os.path.join(os.path.dirname(bpy.data.filepath), "zgk_beat_120.wav")
+WAV = os.path.join(os.path.dirname(bpy.data.filepath), "svk_beat_120.wav")
 
 
 def view3d():
@@ -14,7 +14,7 @@ def view3d():
 def open_browser():
     a = view3d()
     with bpy.context.temp_override(area=a, region=next(r for r in a.regions if r.type == "UI")):
-        r = bpy.ops.zgk.beat_detect("INVOKE_DEFAULT")
+        r = bpy.ops.svk.beat_detect("INVOKE_DEFAULT")
     print("BROWSER invoke ->", r)
     return None
 
@@ -32,13 +32,13 @@ def snap():
 
 def finish():
     sc = bpy.context.scene
-    bpy.ops.zgk.beat_detect("EXEC_DEFAULT", filepath=WAV)
+    bpy.ops.svk.beat_detect("EXEC_DEFAULT", filepath=WAV)
     n = len([m for m in sc.timeline_markers if m.name.startswith("beat_")])
     se = sc.sequence_editor
     strips = list(getattr(se, "strips_all", None) or getattr(se, "sequences_all", []))
-    print("BROWSER after pick:", n, "beats @", round(sc.zgk_bpm, 1), "BPM, audio strips:",
+    print("BROWSER after pick:", n, "beats @", round(sc.svk_bpm, 1), "BPM, audio strips:",
           sum(s.type == "SOUND" for s in strips))
-    bpy.ops.zgk.beat_detect("EXEC_DEFAULT", filepath=WAV)            # run twice: must not stack audio
+    bpy.ops.svk.beat_detect("EXEC_DEFAULT", filepath=WAV)            # run twice: must not stack audio
     strips = list(getattr(se, "strips_all", None) or getattr(se, "sequences_all", []))
     print("BROWSER second run audio strips:", sum(s.type == "SOUND" for s in strips))
     bpy.ops.wm.quit_blender()

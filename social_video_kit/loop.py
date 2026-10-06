@@ -62,9 +62,9 @@ def texture_report(context):
     return issues
 
 
-class ZGK_OT_loop_check(bpy.types.Operator):
+class SVK_OT_loop_check(bpy.types.Operator):
     """Report every animation curve / texture that breaks a seamless loop over the scene range"""
-    bl_idname = "zgk.loop_check"
+    bl_idname = "svk.loop_check"
     bl_label = "Check Loop"
 
     def execute(self, context):
@@ -78,13 +78,13 @@ class ZGK_OT_loop_check(bpy.types.Operator):
             self.report({"INFO"}, "Loop is seamless")
         else:
             self.report({"INFO"}, f"{len(bad)} curve(s) and {len(tex)} texture(s) break the loop")
-        context.scene.zgk_loop_issues = len(bad) + len(tex)
+        context.scene.svk_loop_issues = len(bad) + len(tex)
         return {"FINISHED"}
 
 
-class ZGK_OT_loop_fix(bpy.types.Operator):
+class SVK_OT_loop_fix(bpy.types.Operator):
     """Make the animation loop seamlessly over the scene frame range"""
-    bl_idname = "zgk.loop_fix"
+    bl_idname = "svk.loop_fix"
     bl_label = "Fix Loop"
     bl_options = {"REGISTER", "UNDO"}
 
@@ -124,14 +124,14 @@ class ZGK_OT_loop_fix(bpy.types.Operator):
                             # shift the playback start instead of offsetting (offset is applied after wrap)
                             iu.frame_start -= iu.frame_offset
                             iu.frame_offset = 0
-        context.scene.zgk_loop_issues = len(loop_report(context, bool(context.selected_objects))) + len(texture_report(context))
+        context.scene.svk_loop_issues = len(loop_report(context, bool(context.selected_objects))) + len(texture_report(context))
         self.report({"INFO"}, f"Fixed {fixed} curve(s)")
         return {"FINISHED"}
 
 
-class ZGK_OT_loop_set_range(bpy.types.Operator):
+class SVK_OT_loop_set_range(bpy.types.Operator):
     """Set the scene range to a whole number of loops of a given length"""
-    bl_idname = "zgk.loop_set_range"
+    bl_idname = "svk.loop_set_range"
     bl_label = "Set Loop Range"
     bl_options = {"REGISTER", "UNDO"}
 
@@ -143,4 +143,4 @@ class ZGK_OT_loop_set_range(bpy.types.Operator):
         return {"FINISHED"}
 
 
-classes = (ZGK_OT_loop_check, ZGK_OT_loop_fix, ZGK_OT_loop_set_range)
+classes = (SVK_OT_loop_check, SVK_OT_loop_fix, SVK_OT_loop_set_range)

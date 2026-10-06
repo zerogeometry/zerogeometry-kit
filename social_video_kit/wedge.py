@@ -52,9 +52,9 @@ def _set(owner, attr, idx, value):
         v[idx] = value
 
 
-class ZGK_OT_wedge(bpy.types.Operator):
+class SVK_OT_wedge(bpy.types.Operator):
     """Render one still per value of a property and build a contact sheet"""
-    bl_idname = "zgk.wedge"
+    bl_idname = "svk.wedge"
     bl_label = "Wedge Render"
 
     data_path: StringProperty(name="Property",
@@ -160,7 +160,7 @@ class ZGK_OT_wedge(bpy.types.Operator):
             if keep_media is not None:
                 ims.media_type = keep_media
             sc.render.filepath, sc.render.resolution_percentage, ims.file_format = keep
-        # ---- ZeroGeometry contact sheet: ink background, header with lime rule, lime value labels
+        # ---- contact sheet: dark background, header with a lime rule, value labels
         INK, LIME = (0.039, 0.039, 0.039, 1.0), (0.8, 1.0, 0.0, 1.0)
         th, tw = tiles[0].shape[:2]
         cols = min(self.columns, len(tiles))
@@ -182,7 +182,7 @@ class ZGK_OT_wedge(bpy.types.Operator):
             sheet[top - th - lab:top - th, x:x + 3] = LIME       # lime tick beside the value
             cells.append((x, top - th - lab))
         path = os.path.join(out_dir, "wedge_sheet.png")
-        sh = bpy.data.images.new("ZGK_Wedge_Sheet", W, H, alpha=True)
+        sh = bpy.data.images.new("SVK_Wedge_Sheet", W, H, alpha=True)
         sh.pixels.foreach_set(sheet.ravel())
         sh.filepath_raw = path
         sh.file_format = "PNG"
@@ -191,12 +191,12 @@ class ZGK_OT_wedge(bpy.types.Operator):
         self._burn_text(path, W, H, head, cells, values)
         with open(os.path.join(out_dir, "wedge_values.txt"), "w") as fh:
             fh.write(f"{self.data_path}\n" + "\n".join(f"{i:02d}: {v:.6g}" for i, v in enumerate(values)))
-        sc.zgk_last_sheet = path
+        sc.svk_last_sheet = path
         self.report({"INFO"}, f"Contact sheet: {path}")
         return {"FINISHED"}
 
     def _burn_text(self, path, W, H, head, cells, values):
-        """Brand type on the sheet: 'ZERO GEOMETRY · WEDGE' header + each tile's value (needs Blender 4.1+)."""
+        """Text on the sheet: 'WEDGE · property · range' header + each tile's value (needs Blender 4.1+)."""
         try:
             import blf, imbuf
             from .overlay import fonts
@@ -204,31 +204,25 @@ class ZGK_OT_wedge(bpy.types.Operator):
             _draw = blf.draw_buffer if hasattr(blf, "draw_buffer") else blf.draw   # image buffers need draw_buffer
             ib = imbuf.load(path)
             prop = self.data_path.split(".")[-1][:60]
-            with blf.bind_imbuf(f.get("light", 0), ib):
-                blf.size(f.get("light", 0), 22)
-                blf.color(f.get("light", 0), 1, 1, 1, 1)
-                blf.position(f.get("light", 0), 16, H - 40, 0)
-                _draw(f.get("light", 0), "ZERO ")
-                zw = blf.dimensions(f.get("light", 0), "ZERO ")[0]
             with blf.bind_imbuf(f.get("bold", 0), ib):
                 blf.size(f.get("bold", 0), 22)
                 blf.color(f.get("bold", 0), 1, 1, 1, 1)
-                blf.position(f.get("bold", 0), 16 + zw, H - 40, 0)
-                _draw(f.get("bold", 0), "GEOMETRY")
-                gw = blf.dimensions(f.get("bold", 0), "GEOMETRY")[0]
+                blf.position(f.get("bold", 0), 16, H - 40, 0)
+                _draw(f.get("bold", 0), "WEDGE")
+                gw = blf.dimensions(f.get("bold", 0), "WEDGE")[0]
             with blf.bind_imbuf(f.get("mono", 0), ib):
                 m = f.get("mono", 0)
                 blf.size(m, 15)
                 blf.color(m, 0.8, 1.0, 0.0, 1)
-                blf.position(m, 30 + zw + gw, H - 38, 0)
-                _draw(m, f"WEDGE  ·  {prop}  ·  {self.start:g} to {self.end:g}")
+                blf.position(m, 30 + gw, H - 38, 0)
+                _draw(m, f"{prop}  ·  {self.start:g} to {self.end:g}  ·  {len(values)} steps")
                 blf.color(m, 0.9, 0.9, 0.9, 1)
                 for i, ((x, y), v) in enumerate(zip(cells, values)):
                     blf.position(m, x + 10, y + 8, 0)
                     _draw(m, f"{i:02d}   {v:.4g}")
             imbuf.write(ib, filepath=path) if hasattr(imbuf, "write") else ib.save(filepath=path)
         except Exception as ex:                                  # older Blender: sheet still works, no labels
-            print("ZeroGeometry Kit: wedge labels skipped:", ex)
+            print("Social Video Kit: wedge labels skipped:", ex)
 
 
-classes = (ZGK_OT_wedge,)
+classes = (SVK_OT_wedge,)

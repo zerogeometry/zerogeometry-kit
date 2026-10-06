@@ -1,8 +1,8 @@
 schema_version = "1.0.0"
 
 id = "zerogeometry_kit"
-version = "1.0.1"
-name = "ZeroGeometry Kit"
+version = "1.1.0"
+name = "ZG Social Video Kit"
 tagline = "Vertical reframing, beat sync, perfect loops and wedge renders"
 maintainer = "ZeroGeometry"
 type = "add-on"

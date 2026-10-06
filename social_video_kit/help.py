@@ -1,10 +1,9 @@
-"""In-app help: '?' popups per section, the Quick Start list, the bundled guide page and the website link."""
+"""In-app help: '?' popups per section, the Quick Start list and the bundled guide page."""
 import os
 import bpy
 from bpy.props import StringProperty
 
-VERSION = "1.0.1"
-WEBSITE = "https://zerogeometry.com"
+VERSION = "1.1.0"
 GUIDE = os.path.join(os.path.dirname(__file__), "assets", "guide.html")
 
 # short lines: Blender labels don't wrap, so keep every line sidebar-width
@@ -15,8 +14,8 @@ HELP = {
         "    scene is made; your original is safe.",
         "3  Pick your product as the Subject,",
         "    then Auto-Follow keeps it in frame.",
-        "4  TikTok / Reels / Shorts shows where",
-        "    the app's buttons cover the video.",
+        "4  All Platforms shows where TikTok,",
+        "    Reels and Shorts buttons cover video.",
         "5  Render All Formats exports every",
         "    version as MP4 to your Export Folder.",
     ]),
@@ -34,9 +33,10 @@ HELP = {
     ]),
     "GUIDES": ("Camera Guides", [
         "Drawn in camera view only, never rendered.",
-        "  ZERO GEOMETRY badge: the frame format.",
-        "  Lime box: TikTok / Reels / Shorts safe",
-        "  area. Keep text and product inside it.",
+        "  Badge: the frame format and size.",
+        "  Lime box: the safe area (All Platforms,",
+        "  TikTok, Reels or Shorts). Keep text",
+        "  and product inside it.",
         "  Lime dot: pulses on every beat marker.",
         "Use the eye button to look through the camera.",
     ]),
@@ -72,10 +72,10 @@ HELP = {
 }
 
 
-class ZGK_OT_help(bpy.types.Operator):
+class SVK_OT_help(bpy.types.Operator):
     """How this tool works"""
-    bl_idname = "zgk.help"
-    bl_label = "ZeroGeometry Help"
+    bl_idname = "svk.help"
+    bl_label = "Social Video Kit Help"
 
     topic: StringProperty(default="QUICKSTART")
 
@@ -96,14 +96,12 @@ class ZGK_OT_help(bpy.types.Operator):
         col = l.column(align=True)
         for line in lines:
             col.label(text=line)
-        row = l.row(align=True)
-        row.operator("zgk.open_guide", text="Full Guide", icon="HELP")
-        row.operator("wm.url_open", text="zerogeometry.com", icon="URL").url = WEBSITE
+        l.operator("svk.open_guide", text="Full Guide", icon="HELP")
 
 
-class ZGK_OT_open_guide(bpy.types.Operator):
-    """Open the ZeroGeometry Kit guide (works offline, it ships with the add-on)"""
-    bl_idname = "zgk.open_guide"
+class SVK_OT_open_guide(bpy.types.Operator):
+    """Open the Social Video Kit guide (works offline, it ships with the add-on)"""
+    bl_idname = "svk.open_guide"
     bl_label = "Open Guide"
 
     def execute(self, context):
@@ -117,4 +115,4 @@ def draw_quickstart(layout):
         col.label(text=line)
 
 
-classes = (ZGK_OT_help, ZGK_OT_open_guide)
+classes = (SVK_OT_help, SVK_OT_open_guide)

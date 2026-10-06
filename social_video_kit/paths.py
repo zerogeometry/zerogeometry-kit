@@ -1,19 +1,19 @@
-"""Where ZeroGeometry Kit writes files. One visible, user-changeable folder:
-default '//ZeroGeometry Exports/' next to the .blend; for a never-saved file, the user's Videos folder."""
+"""Where Social Video Kit writes files. One visible, user-changeable folder:
+default '//Social Video Exports/' next to the .blend; for a never-saved file, the user's Videos folder."""
 import os
 import bpy
 
-DEFAULT = "//ZeroGeometry Exports/"
+DEFAULT = "//Social Video Exports/"
 
 
 def fallback_dir():
     home = os.path.expanduser("~")
     videos = os.path.join(home, "Videos")
-    return os.path.join(videos if os.path.isdir(videos) else home, "ZeroGeometry Exports")
+    return os.path.join(videos if os.path.isdir(videos) else home, "Social Video Exports")
 
 
 def output_dir(scene, sub="", create=False):
-    raw = (scene.zgk_output_dir or DEFAULT).strip()
+    raw = (scene.svk_output_dir or DEFAULT).strip()
     if raw.startswith("//") and not bpy.data.filepath:       # unsaved file: '//' has nothing to be relative to
         base = fallback_dir()
     else:
@@ -37,9 +37,9 @@ def format_label(scene):
     return known.get((w, h), f"{r.resolution_x}x{r.resolution_y}")
 
 
-class ZGK_OT_open_output(bpy.types.Operator):
-    """Open the ZeroGeometry export folder in your file browser"""
-    bl_idname = "zgk.open_output"
+class SVK_OT_open_output(bpy.types.Operator):
+    """Open the export folder in your file browser"""
+    bl_idname = "svk.open_output"
     bl_label = "Open Export Folder"
 
     sub: bpy.props.StringProperty(default="")
@@ -50,9 +50,9 @@ class ZGK_OT_open_output(bpy.types.Operator):
         return {"FINISHED"}
 
 
-class ZGK_OT_open_file(bpy.types.Operator):
+class SVK_OT_open_file(bpy.types.Operator):
     """Open this file with your system's default app"""
-    bl_idname = "zgk.open_file"
+    bl_idname = "svk.open_file"
     bl_label = "Open File"
 
     filepath: bpy.props.StringProperty(subtype="FILE_PATH")
@@ -65,9 +65,9 @@ class ZGK_OT_open_file(bpy.types.Operator):
         return {"FINISHED"}
 
 
-class ZGK_OT_choose_output(bpy.types.Operator):
+class SVK_OT_choose_output(bpy.types.Operator):
     """Choose the folder where renders and contact sheets are saved"""
-    bl_idname = "zgk.choose_output"
+    bl_idname = "svk.choose_output"
     bl_label = "Choose Export Folder"
 
     directory: bpy.props.StringProperty(subtype="DIR_PATH")
@@ -78,8 +78,8 @@ class ZGK_OT_choose_output(bpy.types.Operator):
         return {"RUNNING_MODAL"}
 
     def execute(self, context):
-        context.scene.zgk_output_dir = self.directory
+        context.scene.svk_output_dir = self.directory
         return {"FINISHED"}
 
 
-classes = (ZGK_OT_open_output, ZGK_OT_open_file, ZGK_OT_choose_output)
+classes = (SVK_OT_open_output, SVK_OT_open_file, SVK_OT_choose_output)

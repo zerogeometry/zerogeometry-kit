@@ -98,9 +98,9 @@ def _fcurves(idb):
 
 
 # ---------------------------------------------------------------- operators
-class ZGK_OT_beat_detect(bpy.types.Operator):
+class SVK_OT_beat_detect(bpy.types.Operator):
     """Detect beats in an audio file and add timeline markers on every beat"""
-    bl_idname = "zgk.beat_detect"
+    bl_idname = "svk.beat_detect"
     bl_label = "Detect Beats"
     bl_options = {"REGISTER", "UNDO"}
 
@@ -126,25 +126,25 @@ class ZGK_OT_beat_detect(bpy.types.Operator):
             sc.timeline_markers.remove(m)
         for i, t in enumerate(times):
             sc.timeline_markers.new(f"{MARKER_PREFIX}{i + 1:03d}", frame=self.offset_frames + round(t * fps))
-        sc.zgk_bpm = bpm
+        sc.svk_bpm = bpm
         if self.add_sound:
             if not sc.sequence_editor:
                 sc.sequence_editor_create()
             se = sc.sequence_editor
             coll = se.strips if hasattr(se, "strips") else se.sequences     # 4.4+ renamed it
-            for old in [st for st in coll if st.get("zgk_audio")]:         # re-running replaces our track
+            for old in [st for st in coll if st.get("svk_audio")]:         # re-running replaces our track
                 coll.remove(old)
             used = {st.channel for st in coll}
             ch = next(c for c in range(1, 128) if c not in used)
-            strip = coll.new_sound("ZG Beat Track", bpy.path.abspath(self.filepath), ch, self.offset_frames)
-            strip["zgk_audio"] = True
+            strip = coll.new_sound("Beat Track", bpy.path.abspath(self.filepath), ch, self.offset_frames)
+            strip["svk_audio"] = True
         self.report({"INFO"}, f"{len(times)} beats at {bpm:.1f} BPM")
         return {"FINISHED"}
 
 
-class ZGK_OT_beat_grid(bpy.types.Operator):
+class SVK_OT_beat_grid(bpy.types.Operator):
     """Add beat markers from a known BPM (no audio needed)"""
-    bl_idname = "zgk.beat_grid"
+    bl_idname = "svk.beat_grid"
     bl_label = "Beat Grid from BPM"
     bl_options = {"REGISTER", "UNDO"}
 
@@ -162,13 +162,13 @@ class ZGK_OT_beat_grid(bpy.types.Operator):
             sc.timeline_markers.new(f"{MARKER_PREFIX}{i:03d}", frame=round(f))
             f += step
             i += 1
-        sc.zgk_bpm = self.bpm
+        sc.svk_bpm = self.bpm
         return {"FINISHED"}
 
 
-class ZGK_OT_beat_key(bpy.types.Operator):
+class SVK_OT_beat_key(bpy.types.Operator):
     """Key a pulse on selected objects at every Nth beat marker"""
-    bl_idname = "zgk.beat_key"
+    bl_idname = "svk.beat_key"
     bl_label = "Key Pulses to Beats"
     bl_options = {"REGISTER", "UNDO"}
 
@@ -244,9 +244,9 @@ class ZGK_OT_beat_key(bpy.types.Operator):
         return {"FINISHED"}
 
 
-class ZGK_OT_beat_cuts(bpy.types.Operator):
+class SVK_OT_beat_cuts(bpy.types.Operator):
     """Cycle through the selected cameras, cutting every N beats (camera-bound markers)"""
-    bl_idname = "zgk.beat_cuts"
+    bl_idname = "svk.beat_cuts"
     bl_label = "Camera Cuts on Beats"
     bl_options = {"REGISTER", "UNDO"}
 
@@ -278,9 +278,9 @@ class ZGK_OT_beat_cuts(bpy.types.Operator):
         return {"FINISHED"}
 
 
-class ZGK_OT_beat_tempo(bpy.types.Operator):
+class SVK_OT_beat_tempo(bpy.types.Operator):
     """Double or halve the detected tempo (e.g. it found 70 BPM but the song feels like 140)"""
-    bl_idname = "zgk.beat_tempo"
+    bl_idname = "svk.beat_tempo"
     bl_label = "Tempo x2 / ½"
     bl_options = {"REGISTER", "UNDO"}
 
@@ -298,10 +298,10 @@ class ZGK_OT_beat_tempo(bpy.types.Operator):
             for a, b in zip(beats, beats[1:]):
                 new += [a, round((a + b) / 2)]
             new.append(beats[-1])
-            sc.zgk_bpm *= 2
+            sc.svk_bpm *= 2
         else:
             new = beats[::2]
-            sc.zgk_bpm /= 2
+            sc.svk_bpm /= 2
         for m in [m for m in sc.timeline_markers if m.name.startswith(MARKER_PREFIX)]:
             sc.timeline_markers.remove(m)
         for i, f in enumerate(new):
@@ -309,4 +309,4 @@ class ZGK_OT_beat_tempo(bpy.types.Operator):
         return {"FINISHED"}
 
 
-classes = (ZGK_OT_beat_detect, ZGK_OT_beat_grid, ZGK_OT_beat_key, ZGK_OT_beat_cuts, ZGK_OT_beat_tempo)
+classes = (SVK_OT_beat_detect, SVK_OT_beat_grid, SVK_OT_beat_key, SVK_OT_beat_cuts, SVK_OT_beat_tempo)

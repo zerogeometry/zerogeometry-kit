@@ -1,11 +1,11 @@
-"""ZeroGeometry Kit demo scene: original products + a generated beat track (no third-party brands or music).
-blender -b -P demo/build_demo.py      -> demo/zgk_demo.blend + demo/zgk_beat_120.wav
+"""Social Video Kit demo scene: original products + a generated beat track (no third-party brands or music).
+blender -b -P demo/build_demo.py      -> demo/svk_demo.blend + demo/svk_beat_120.wav
 """
 import os, math, wave, struct
 import bpy, bmesh
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-ASSETS = os.path.join(os.path.dirname(HERE), "zerogeometry_kit", "assets")
+ASSETS = os.path.join(HERE, "assets")
 END = 120                                   # 5 s @ 24 fps = 10 beats at 120 BPM
 
 
@@ -16,7 +16,7 @@ def srgb(h):
 LIME, INK, WHITE = srgb("#CCFF00"), srgb("#0A0A0A"), srgb("#F2F2F2")
 
 # ---------------------------------------------------------------- original beat track (synthesised)
-wav = os.path.join(HERE, "zgk_beat_120.wav")
+wav = os.path.join(HERE, "svk_beat_120.wav")
 rate, secs = 22050, 8
 with wave.open(wav, "w") as w:
     w.setnchannels(1); w.setsampwidth(2); w.setframerate(rate)
@@ -33,7 +33,7 @@ with wave.open(wav, "w") as w:
 # ---------------------------------------------------------------- scene
 bpy.ops.wm.read_factory_settings(use_empty=True)
 sc = bpy.context.scene
-sc.name = "ZG Demo"
+sc.name = "Product Demo"
 sc.frame_start, sc.frame_end = 1, END
 sc.render.fps = 24
 sc.render.resolution_x, sc.render.resolution_y = 1920, 1080
@@ -182,5 +182,5 @@ engines = [e.identifier for e in bpy.types.RenderSettings.bl_rna.properties["eng
 sc.render.engine = "BLENDER_EEVEE_NEXT" if "BLENDER_EEVEE_NEXT" in engines else "BLENDER_EEVEE"
 sc.view_settings.view_transform = "AgX"
 sc.view_settings.look = "AgX - Medium High Contrast"
-bpy.ops.wm.save_as_mainfile(filepath=os.path.join(HERE, "zgk_demo.blend"))
+bpy.ops.wm.save_as_mainfile(filepath=os.path.join(HERE, "svk_demo.blend"))
 print("DEMO_BUILT", wav)

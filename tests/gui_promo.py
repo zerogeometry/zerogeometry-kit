@@ -1,22 +1,22 @@
 """Promo / QA screenshots of the INSTALLED extension in the real Blender UI, on the original demo scene.
 Never saves the .blend.
-blender demo/zgk_demo.blend -P tests/gui_promo.py -- <shot> <out.png>
+blender demo/svk_demo.blend -P tests/gui_promo.py -- <shot> <out.png>
 shots: before | reframe | beat | loop | help
 """
 import os, sys
 import bpy
 
 # CLEAN_ENV: launched with --factory-startup so no other add-ons appear in shots; load ours from the repo
-if not hasattr(bpy.types, "ZGK_PT_main"):
+if not hasattr(bpy.types, "SVK_PT_main"):
     sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    import zerogeometry_kit
-    zerogeometry_kit.register()
+    import social_video_kit
+    social_video_kit.register()
 
 args = sys.argv[sys.argv.index("--") + 1:]
 SHOT, OUT = args[0], args[1]
 DEMO = os.path.dirname(bpy.data.filepath)
 log = lambda *a: print("PROMO", *a)
-ORDER = ["ZGK_PT_reframe", "ZGK_PT_beat", "ZGK_PT_loop", "ZGK_PT_wedge"]
+ORDER = ["SVK_PT_reframe", "SVK_PT_beat", "SVK_PT_loop", "SVK_PT_wedge"]
 
 
 def panels(open_set):
@@ -27,7 +27,7 @@ def panels(open_set):
     for c in classes:
         c.bl_options = set() if c.bl_idname in open_set else {"DEFAULT_CLOSED"}
         bpy.utils.register_class(c)
-    about = bpy.types.ZGK_PT_about                       # keep the footer last
+    about = bpy.types.SVK_PT_about                       # keep the footer last
     bpy.utils.unregister_class(about)
     bpy.utils.register_class(about)
 
@@ -58,39 +58,39 @@ def setup():
     sc = bpy.context.scene
     area = view3d()
     if SHOT == "before":
-        panels({"ZGK_PT_reframe"})
-        sc.zgk_overlay = True
-        sc.zgk_platform = "NONE"
+        panels({"SVK_PT_reframe"})
+        sc.svk_overlay = True
+        sc.svk_platform = "NONE"
         sc.frame_set(50)
     elif SHOT == "reframe":
-        panels({"ZGK_PT_reframe"})
-        bpy.ops.zgk.reframe(aspect="9x16", copy_scene=True)
+        panels({"SVK_PT_reframe"})
+        bpy.ops.svk.reframe(aspect="9x16", copy_scene=True)
         v = bpy.context.scene
-        v.zgk_subject_collection = next(c for c in v.collection.children_recursive if c.name.startswith("Products"))
-        bpy.ops.zgk.safe_zones(platform="TIKTOK")
-        bpy.ops.zgk.reframe_follow(use_safe_zone=True, fill=True, follow_y=True)
+        v.svk_subject_collection = next(c for c in v.collection.children_recursive if c.name.startswith("Products"))
+        bpy.ops.svk.safe_zones(platform="ALL")
+        bpy.ops.svk.reframe_follow(use_safe_zone=True, fill=True, follow_y=True)
         v.frame_set(100)
         log("reframed", v.name, v.render.resolution_x, v.render.resolution_y)
     elif SHOT == "beat":
-        panels({"ZGK_PT_beat"})
-        bpy.ops.zgk.beat_detect(filepath=os.path.join(DEMO, "zgk_beat_120.wav"), add_sound=True)
+        panels({"SVK_PT_beat"})
+        bpy.ops.svk.beat_detect(filepath=os.path.join(DEMO, "svk_beat_120.wav"), add_sound=True)
         select({"Bottle Left", "Bottle Hero", "Bottle Right"})
-        bpy.ops.zgk.beat_key(mode="HOP", amount=0.03, decay=8, stagger=2)
+        bpy.ops.svk.beat_key(mode="HOP", amount=0.03, decay=8, stagger=2)
         select(set())
         beats = sorted(m.frame for m in sc.timeline_markers if m.name.startswith("beat_"))
-        log("beats", len(beats), round(sc.zgk_bpm, 1))
-        sc.zgk_overlay = True
-        sc.zgk_platform = "NONE"
+        log("beats", len(beats), round(sc.svk_bpm, 1))
+        sc.svk_overlay = True
+        sc.svk_platform = "NONE"
         sc.frame_set(beats[4] + 3)                                   # mid-hop, dot pulsing
     elif SHOT == "loop":
-        panels({"ZGK_PT_loop"})
+        panels({"SVK_PT_loop"})
         select({"Bottle Hero"})
-        bpy.ops.zgk.loop_check()
-        log("loop issues", sc.zgk_loop_issues)
+        bpy.ops.svk.loop_check()
+        log("loop issues", sc.svk_loop_issues)
         select(set())
         sc.frame_set(1)
     elif SHOT == "help":
-        panels({"ZGK_PT_reframe"})
+        panels({"SVK_PT_reframe"})
         sc.frame_set(60)
     frame_camera(area)
     return None
@@ -101,14 +101,14 @@ def shoot():
     for r in area.regions:
         if r.type == "UI":
             try:
-                r.active_panel_category = "ZeroGeometry"
+                r.active_panel_category = "Social Video"
                 r.tag_redraw()
             except AttributeError:
                 pass
     if SHOT == "help":
         win = [r for r in area.regions if r.type == "WINDOW"][0]
         with bpy.context.temp_override(area=area, region=win):
-            bpy.ops.zgk.help("INVOKE_DEFAULT", topic="QUICKSTART")
+            bpy.ops.svk.help("INVOKE_DEFAULT", topic="QUICKSTART")
 
     def snap():
         bpy.ops.screen.screenshot(filepath=OUT)

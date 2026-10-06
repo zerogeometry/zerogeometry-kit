@@ -8,7 +8,7 @@ from .beat import _fcurves
 from .paths import output_dir, format_label
 
 ASPECTS = {
-    "9x16": (1080, 1920, "Reels / TikTok / Shorts"),
+    "9x16": (1080, 1920, "Vertical: TikTok, Instagram Reels / Stories, YouTube Shorts"),
     "4x5": (1080, 1350, "Instagram feed"),
     "1x1": (1080, 1080, "Square"),
     "16x9": (1920, 1080, "Landscape"),
@@ -17,10 +17,10 @@ ASPECTS = {
 
 def scale_lens(cam_data, k):
     cam_data.lens *= k
-    snap = cam_data.get("zgk_lens_orig")
+    snap = cam_data.get("svk_lens_orig")
     if snap:                                   # keep Auto-Follow's saved original in step
         snap = list(snap)
-        cam_data["zgk_lens_orig"] = [v * k if (i % 2 or snap[0] == -1.0) and i > 0 else v
+        cam_data["svk_lens_orig"] = [v * k if (i % 2 or snap[0] == -1.0) and i > 0 else v
                                      for i, v in enumerate(snap)]
     for fc in _fcurves(cam_data):
         if fc.data_path == "lens":
@@ -43,9 +43,9 @@ def suggested_zoom(src_w, src_h, dst_w, dst_h, subject_width=0.6):
     return 1.0 + (keep_height - 1.0) * (1.0 - subject_width) * 0.5
 
 
-class ZGK_OT_reframe(bpy.types.Operator):
+class SVK_OT_reframe(bpy.types.Operator):
     """Make a reframed copy of this scene for another aspect ratio (social formats)"""
-    bl_idname = "zgk.reframe"
+    bl_idname = "svk.reframe"
     bl_label = "Reframe Scene"
     bl_options = {"REGISTER", "UNDO"}
 
@@ -71,7 +71,7 @@ class ZGK_OT_reframe(bpy.types.Operator):
         dw, dh, _ = ASPECTS[self.aspect]
         if self.copy_scene:
             # always build new formats from the ORIGINAL scene, never from another reframed copy
-            master = bpy.data.scenes.get(src.get("zgk_source", src.name), src)
+            master = bpy.data.scenes.get(src.get("svk_source", src.name), src)
             existing = next((s for s in family(master) if format_label(s) == self.aspect), None)
             if existing is not None:
                 if context.window:
@@ -86,7 +86,7 @@ class ZGK_OT_reframe(bpy.types.Operator):
             bpy.ops.scene.new(type="FULL_COPY")
             sc = context.scene
             sc.name = f"{src.name}_{self.aspect}"
-            sc["zgk_source"] = src.get("zgk_source", src.name)        # remember the master scene
+            sc["svk_source"] = src.get("svk_source", src.name)        # remember the master scene
             # make sure the copy owns its cameras: never rescale the master's lenses by accident
             for ob in sc.objects:
                 if ob.type == "CAMERA" and ob.data.users > 1:
@@ -106,14 +106,14 @@ class ZGK_OT_reframe(bpy.types.Operator):
             done.add(cam.data.name)
             cam.data.sensor_fit = "HORIZONTAL"
             scale_lens(cam.data, k)
-        sc.zgk_reframe_zoom = k
+        sc.svk_reframe_zoom = k
         self.report({"INFO"}, f"{sc.name}: {dw}x{dh}, lens x{k:.2f} on {len(done)} camera(s)")
         return {"FINISHED"}
 
 
-class ZGK_OT_reframe_nudge(bpy.types.Operator):
+class SVK_OT_reframe_nudge(bpy.types.Operator):
     """Punch in / pull out every camera lens in this scene (keyframes included)"""
-    bl_idname = "zgk.reframe_nudge"
+    bl_idname = "svk.reframe_nudge"
     bl_label = "Nudge Zoom"
     bl_options = {"REGISTER", "UNDO"}
 
@@ -125,7 +125,7 @@ class ZGK_OT_reframe_nudge(bpy.types.Operator):
         cams |= {m.camera for m in sc.timeline_markers if m.camera}
         for data in {c.data for c in cams}:
             scale_lens(data, self.factor)
-        sc.zgk_reframe_zoom *= self.factor
+        sc.svk_reframe_zoom *= self.factor
         return {"FINISHED"}
 
 
@@ -133,10 +133,10 @@ def _subject_points(context):
     """World-space bounding-box corners of the chosen subject (object, or every object in a collection)."""
     sc = context.scene
     obs = []
-    if sc.zgk_subject_collection:
-        obs = [o for o in sc.zgk_subject_collection.all_objects if o.type in {"MESH", "CURVE", "FONT", "META", "EMPTY"}]
-    elif sc.zgk_subject:
-        obs = [sc.zgk_subject]
+    if sc.svk_subject_collection:
+        obs = [o for o in sc.svk_subject_collection.all_objects if o.type in {"MESH", "CURVE", "FONT", "META", "EMPTY"}]
+    elif sc.svk_subject:
+        obs = [sc.svk_subject]
     pts = []
     for o in obs:
         if o.type == "EMPTY":
@@ -157,10 +157,10 @@ def _smooth(vals, window):
     return out
 
 
-class ZGK_OT_reframe_follow(bpy.types.Operator):
+class SVK_OT_reframe_follow(bpy.types.Operator):
     """Keep the subject centred and inside the frame on every frame by keying the camera's lens shift
     (and optionally zoom). The camera move itself is untouched -- like Auto Reframe, but 3D-aware"""
-    bl_idname = "zgk.reframe_follow"
+    bl_idname = "svk.reframe_follow"
     bl_label = "Auto-Follow Subject"
     bl_options = {"REGISTER", "UNDO"}
 
@@ -174,19 +174,19 @@ class ZGK_OT_reframe_follow(bpy.types.Operator):
                             description="1 = centre exactly, lower = gentle drift toward the subject")
     smoothing: IntProperty(name="Smoothing (frames)", default=9, min=1, max=97)
     use_safe_zone: BoolProperty(name="Centre in the platform safe box", default=True,
-                                description="Aim for the centre of the area not covered by TikTok/Reels UI")
+                                description="Aim for the centre of the area the app interface doesn't cover")
 
     # ---- original-lens snapshot, so re-running never compounds the zoom
     @staticmethod
     def _snapshot_lens(cd):
-        if "zgk_lens_orig" in cd:
+        if "svk_lens_orig" in cd:
             return
         keys = [(kp.co.x, kp.co.y) for fc in _fcurves(cd) if fc.data_path == "lens" for kp in fc.keyframe_points]
-        cd["zgk_lens_orig"] = [v for xy in keys for v in xy] if keys else [-1.0, cd.lens]
+        cd["svk_lens_orig"] = [v for xy in keys for v in xy] if keys else [-1.0, cd.lens]
 
     @staticmethod
     def _restore_lens(cd):
-        snap = list(cd.get("zgk_lens_orig", []))
+        snap = list(cd.get("svk_lens_orig", []))
         if not snap:
             return
         for fc in _fcurves(cd):
@@ -206,7 +206,7 @@ class ZGK_OT_reframe_follow(bpy.types.Operator):
         if not sc.camera:
             self.report({"ERROR"}, "Scene has no active camera")
             return {"CANCELLED"}
-        if not (sc.zgk_subject or sc.zgk_subject_collection):
+        if not (sc.svk_subject or sc.svk_subject_collection):
             self.report({"ERROR"}, "Pick a subject object or collection first")
             return {"CANCELLED"}
         if not _subject_points(context):
@@ -220,12 +220,11 @@ class ZGK_OT_reframe_follow(bpy.types.Operator):
         w, h = sc.render.resolution_x, sc.render.resolution_y
         big = max(w, h)
         # target point in the frame: centre of the platform safe box, or the frame centre
-        from .overlay import PLATFORMS
-        p = PLATFORMS.get(sc.zgk_platform, PLATFORMS["NONE"])
-        if self.use_safe_zone and sc.zgk_platform != "NONE" and h > w:
-            tx = (p["l"] + (1 - 0.17)) / 2
-            ty = (p["b"] + (1 - p["t"])) / 2
-            room_x, room_y = (1 - 0.17 - p["l"]), (1 - p["t"] - p["b"])
+        from .overlay import safe_box
+        if self.use_safe_zone and sc.svk_platform != "NONE" and h > w:
+            bx0, bx1, by0, by1 = safe_box(sc.svk_platform)
+            tx, ty = (bx0 + bx1) / 2, (by0 + by1) / 2
+            room_x, room_y = bx1 - bx0, by1 - by0
         else:
             tx = ty = 0.5
             room_x = room_y = 1.0
@@ -278,9 +277,9 @@ class ZGK_OT_reframe_follow(bpy.types.Operator):
         return {"FINISHED"}
 
 
-class ZGK_OT_reframe_follow_clear(bpy.types.Operator):
+class SVK_OT_reframe_follow_clear(bpy.types.Operator):
     """Remove Auto-Follow and restore every camera's original lens"""
-    bl_idname = "zgk.reframe_follow_clear"
+    bl_idname = "svk.reframe_follow_clear"
     bl_label = "Clear Follow"
     bl_options = {"REGISTER", "UNDO"}
 
@@ -289,32 +288,34 @@ class ZGK_OT_reframe_follow_clear(bpy.types.Operator):
         cams = ({sc.camera} if sc.camera else set()) | {m.camera for m in sc.timeline_markers if m.camera}
         n = 0
         for c in cams:
-            if "zgk_lens_orig" in c.data:
-                ZGK_OT_reframe_follow._restore_lens(c.data)
-                del c.data["zgk_lens_orig"]
+            if "svk_lens_orig" in c.data:
+                SVK_OT_reframe_follow._restore_lens(c.data)
+                del c.data["svk_lens_orig"]
                 n += 1
         self.report({"INFO"}, f"Restored {n} camera(s)")
         return {"FINISHED"}
 
 
 # ---------------------------------------------------------------- social safe zones
-class ZGK_OT_safe_zones(bpy.types.Operator):
-    """Show where the platform's buttons and captions cover a vertical video (drawn by Camera Guides)"""
-    bl_idname = "zgk.safe_zones"
-    bl_label = "Social Safe Zones"
+class SVK_OT_safe_zones(bpy.types.Operator):
+    """Show where an app's buttons and captions cover a vertical video (drawn by Camera Guides)"""
+    bl_idname = "svk.safe_zones"
+    bl_label = "Safe Area"
     bl_options = {"REGISTER", "UNDO"}
 
     platform: EnumProperty(name="Platform", items=[
-        ("TIKTOK", "TikTok", "Right-hand buttons, caption + music bar at the bottom"),
-        ("REELS", "Reels", "Instagram Reels"),
-        ("SHORTS", "Shorts", "YouTube Shorts"),
-        ("NONE", "Off", "Hide the safe zones"),
-    ], default="TIKTOK")
+        ("ALL", "All platforms", "The combined safe area of TikTok, Instagram Reels and YouTube Shorts: "
+                                 "one frame that works everywhere"),
+        ("TIKTOK", "TikTok", "TikTok's buttons, caption and music bar"),
+        ("REELS", "Instagram Reels", "Instagram Reels' buttons and caption"),
+        ("SHORTS", "YouTube Shorts", "YouTube Shorts' buttons and caption"),
+        ("NONE", "Off", "Hide the safe area"),
+    ], default="ALL")
 
     def execute(self, context):
         sc = context.scene
-        sc.zgk_platform = self.platform
-        sc.zgk_overlay = True
+        sc.svk_platform = self.platform
+        sc.svk_overlay = True
         cams = ({sc.camera} if sc.camera else set()) | {m.camera for m in sc.timeline_markers if m.camera}
         for c in cams:
             c.data.show_passepartout = True
@@ -329,9 +330,9 @@ class ZGK_OT_safe_zones(bpy.types.Operator):
 
 
 # ---------------------------------------------------------------- all formats + batch render
-class ZGK_OT_reframe_all(bpy.types.Operator):
+class SVK_OT_reframe_all(bpy.types.Operator):
     """Create 9:16, 4:5 and 1:1 copies of this scene in one go"""
-    bl_idname = "zgk.reframe_all"
+    bl_idname = "svk.reframe_all"
     bl_label = "Make All Social Formats"
     bl_options = {"REGISTER", "UNDO"}
 
@@ -339,7 +340,7 @@ class ZGK_OT_reframe_all(bpy.types.Operator):
 
     @classmethod
     def poll(cls, context):
-        return ZGK_OT_reframe.poll(context)
+        return SVK_OT_reframe.poll(context)
 
     def execute(self, context):
         src = context.window.scene if context.window else context.scene
@@ -348,7 +349,7 @@ class ZGK_OT_reframe_all(bpy.types.Operator):
             if context.window:
                 context.window.scene = src
             before = len(bpy.data.scenes)
-            bpy.ops.zgk.reframe(aspect=asp, subject_width=self.subject_width, copy_scene=True)
+            bpy.ops.svk.reframe(aspect=asp, subject_width=self.subject_width, copy_scene=True)
             if len(bpy.data.scenes) > before:
                 made.append(context.scene.name)
         if context.window:
@@ -359,13 +360,13 @@ class ZGK_OT_reframe_all(bpy.types.Operator):
 
 def family(scene):
     """The master scene plus every reframed copy of it."""
-    master = scene.get("zgk_source", scene.name)
-    return [s for s in bpy.data.scenes if s.name == master or s.get("zgk_source") == master]
+    master = scene.get("svk_source", scene.name)
+    return [s for s in bpy.data.scenes if s.name == master or s.get("svk_source") == master]
 
 
-class ZGK_OT_goto_scene(bpy.types.Operator):
+class SVK_OT_goto_scene(bpy.types.Operator):
     """Switch to this version of the scene"""
-    bl_idname = "zgk.goto_scene"
+    bl_idname = "svk.goto_scene"
     bl_label = "Go to Scene"
 
     name: bpy.props.StringProperty()
@@ -377,9 +378,9 @@ class ZGK_OT_goto_scene(bpy.types.Operator):
         return {"FINISHED"}
 
 
-class ZGK_OT_look_through(bpy.types.Operator):
+class SVK_OT_look_through(bpy.types.Operator):
     """Look through the scene camera (Numpad 0). The Camera Guides are drawn there"""
-    bl_idname = "zgk.look_through"
+    bl_idname = "svk.look_through"
     bl_label = "Camera View"
 
     def execute(self, context):
@@ -407,17 +408,17 @@ def _has_sound(s):
     return any(st.type == "SOUND" for st in strips)
 
 
-class ZGK_OT_render_formats(bpy.types.Operator):
+class SVK_OT_render_formats(bpy.types.Operator):
     """Render this scene and every reframed version of it to MP4 (H.264, with the scene's audio) into the
 export folder. Your own render settings are restored afterwards"""
-    bl_idname = "zgk.render_formats"
+    bl_idname = "svk.render_formats"
     bl_label = "Render All Formats"
 
     def execute(self, context):
         import os
         scenes = family(context.scene)
         out_dir = output_dir(context.scene, "Renders", create=True)
-        master = context.scene.get("zgk_source", context.scene.name)
+        master = context.scene.get("svk_source", context.scene.name)
         wm = context.window_manager
         wm.progress_begin(0, len(scenes))
         written = []
@@ -467,10 +468,10 @@ export folder. Your own render settings are restored afterwards"""
                     r.resolution_x, r.resolution_y = keep_res
         finally:
             wm.progress_end()
-        context.scene.zgk_last_export = out_dir
+        context.scene.svk_last_export = out_dir
         self.report({"INFO"}, f"{len(written)} MP4(s) saved to {out_dir}")
         return {"FINISHED"}
 
 
-classes = (ZGK_OT_reframe, ZGK_OT_reframe_nudge, ZGK_OT_reframe_follow, ZGK_OT_reframe_follow_clear,
-           ZGK_OT_safe_zones, ZGK_OT_reframe_all, ZGK_OT_render_formats, ZGK_OT_goto_scene, ZGK_OT_look_through)
+classes = (SVK_OT_reframe, SVK_OT_reframe_nudge, SVK_OT_reframe_follow, SVK_OT_reframe_follow_clear,
+           SVK_OT_safe_zones, SVK_OT_reframe_all, SVK_OT_render_formats, SVK_OT_goto_scene, SVK_OT_look_through)

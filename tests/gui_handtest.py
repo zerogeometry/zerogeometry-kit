@@ -1,20 +1,20 @@
 """Click-through test in the REAL Blender UI with the INSTALLED extension.
 Every button is pressed the way the panel presses it (INVOKE_DEFAULT, sidebar context), with
 screenshots of the panel, dialogs, redo panel and file browser. Never saves the .blend.
-blender demo/zgk_demo.blend -P tests/gui_handtest.py -- <out_dir>
+blender demo/svk_demo.blend -P tests/gui_handtest.py -- <out_dir>
 """
 import os, sys, glob, tempfile, traceback
 import bpy
 
 # CLEAN_ENV: launched with --factory-startup so no other add-ons appear in shots; load ours from the repo
-if not hasattr(bpy.types, "ZGK_PT_main"):
+if not hasattr(bpy.types, "SVK_PT_main"):
     sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    import zerogeometry_kit
-    zerogeometry_kit.register()
+    import social_video_kit
+    social_video_kit.register()
 
 OUT = sys.argv[sys.argv.index("--") + 1]
 os.makedirs(OUT, exist_ok=True)
-EXPORT = os.path.join(tempfile.gettempdir(), "zgk_handtest_exports") + os.sep
+EXPORT = os.path.join(tempfile.gettempdir(), "svk_handtest_exports") + os.sep
 results = []
 
 
@@ -50,14 +50,14 @@ def press(op, **kw):
 
 
 def open_panels(*names):
-    order = ["ZGK_PT_reframe", "ZGK_PT_beat", "ZGK_PT_loop", "ZGK_PT_wedge"]
+    order = ["SVK_PT_reframe", "SVK_PT_beat", "SVK_PT_loop", "SVK_PT_wedge"]
     classes = [getattr(bpy.types, n) for n in order]
     for c in reversed(classes):
         bpy.utils.unregister_class(c)
     for c in classes:
         c.bl_options = set() if c.bl_idname in names else {"DEFAULT_CLOSED"}
         bpy.utils.register_class(c)
-    about = bpy.types.ZGK_PT_about                          # keep the footer last
+    about = bpy.types.SVK_PT_about                          # keep the footer last
     bpy.utils.unregister_class(about)
     bpy.utils.register_class(about)
 
@@ -67,7 +67,7 @@ def show_tab():
     for r in a.regions:
         if r.type == "UI":
             try:
-                r.active_panel_category = "ZeroGeometry"
+                r.active_panel_category = "Social Video"
                 r.tag_redraw()
             except AttributeError:
                 pass
@@ -97,7 +97,7 @@ def step(fn):
 @step
 def s_setup():
     sc = bpy.context.scene
-    sc.zgk_output_dir = EXPORT
+    sc.svk_output_dir = EXPORT
     a = view3d()
     sp = a.spaces.active
     sp.show_region_ui = True
@@ -106,19 +106,19 @@ def s_setup():
     for r in a.regions:
         if r.type == "UI":
             try:
-                r.active_panel_category = "ZeroGeometry"
+                r.active_panel_category = "Social Video"
             except AttributeError:          # read-only in some contexts: fall back to the tab order
                 pass
-    open_panels("ZGK_PT_reframe")
-    check("panel registered + Camera Guides off by default", not sc.zgk_overlay)
+    open_panels("SVK_PT_reframe")
+    check("panel registered + Camera Guides off by default", not sc.svk_overlay)
 
 
 @step
 def s_camera_view():
-    press(bpy.ops.zgk.look_through)
+    press(bpy.ops.svk.look_through)
     check("eye button -> camera view", view3d().spaces.active.region_3d.view_perspective == "CAMERA")
-    press(bpy.ops.zgk.overlay_toggle)
-    check("Camera Guides toggle on", bpy.context.scene.zgk_overlay)
+    press(bpy.ops.svk.overlay_toggle)
+    check("Camera Guides toggle on", bpy.context.scene.svk_overlay)
 
 
 @step
@@ -129,7 +129,7 @@ def s_shot_panel():
 @step
 def s_reframe():
     n0 = len(bpy.data.scenes)
-    r = press(bpy.ops.zgk.reframe, aspect="9x16")
+    r = press(bpy.ops.svk.reframe, aspect="9x16")
     sc = bpy.context.window.scene
     check("9:16 button makes + switches to the copy", r == {"FINISHED"} and len(bpy.data.scenes) == n0 + 1
           and sc.render.resolution_y == 1920, sc.name)
@@ -142,59 +142,58 @@ def s_undo():
     changing = ["reframe", "reframe_all", "reframe_nudge", "reframe_follow", "reframe_follow_clear",
                 "safe_zones", "beat_detect", "beat_grid", "beat_key", "beat_cuts", "beat_tempo",
                 "loop_fix", "loop_set_range"]
-    missing = [n for n in changing if "UNDO" not in getattr(bpy.types, "ZGK_OT_" + n).bl_options]
+    missing = [n for n in changing if "UNDO" not in getattr(bpy.types, "SVK_OT_" + n).bl_options]
     check("every scene-changing button supports Ctrl+Z", not missing, ", ".join(missing))
 
 
 @step
 def s_follow():
     sc = bpy.context.window.scene
-    sc.zgk_subject_collection = next(c for c in sc.collection.children_recursive if c.name.startswith("Products"))
-    press(bpy.ops.zgk.safe_zones, platform="TIKTOK")
-    check("TikTok button -> guides + platform", sc.zgk_overlay and sc.zgk_platform == "TIKTOK")
-    r = press(bpy.ops.zgk.reframe_follow, fill=sc.zgk_follow_fill, follow_y=True)
-    keyed = any(fc.data_path == "shift_x" for fc in __import__("zerogeometry_kit" if "zerogeometry_kit" in sys.modules
-                                                                   else "bl_ext.user_default.zerogeometry_kit",
-                                                                   fromlist=["beat"]).beat._fcurves(sc.camera.data))
+    sc.svk_subject_collection = next(c for c in sc.collection.children_recursive if c.name.startswith("Products"))
+    press(bpy.ops.svk.safe_zones, platform="ALL")
+    check("All-platforms safe area button -> guides + platform", sc.svk_overlay and sc.svk_platform == "ALL")
+    r = press(bpy.ops.svk.reframe_follow, fill=sc.svk_follow_fill, follow_y=True)
+    pkg = sys.modules[bpy.types.SVK_PT_main.__module__]           # works for repo import and installed extension
+    keyed = any(fc.data_path == "shift_x" for fc in pkg.beat._fcurves(sc.camera.data))
     check("Auto-Follow (as clicked)", r == {"FINISHED"} and keyed)
     sc.frame_set(100)
 
 
 @step
 def s_shot_follow():
-    shot("hand_02_follow_tiktok.png")
+    shot("hand_02_follow_safe_area.png")
 
 
 @step
 def s_nudge_and_switch():
     sc = bpy.context.window.scene
     l0 = sc.camera.data.lens
-    press(bpy.ops.zgk.reframe_nudge, factor=1.1)
+    press(bpy.ops.svk.reframe_nudge, factor=1.1)
     l1 = sc.camera.data.lens
-    press(bpy.ops.zgk.reframe_nudge, factor=1 / 1.1)
+    press(bpy.ops.svk.reframe_nudge, factor=1 / 1.1)
     check("Zoom In / Out", abs(l1 / l0 - 1.1) < 1e-3 and abs(sc.camera.data.lens - l0) < 1e-3)
-    master = sc["zgk_source"]
-    press(bpy.ops.zgk.goto_scene, name=master)
+    master = sc["svk_source"]
+    press(bpy.ops.svk.goto_scene, name=master)
     ok = bpy.context.window.scene.name == master
-    press(bpy.ops.zgk.goto_scene, name=sc.name)
+    press(bpy.ops.svk.goto_scene, name=sc.name)
     check("format switch buttons", ok and bpy.context.window.scene == sc)
-    press(bpy.ops.zgk.reframe_follow_clear)
-    check("X (Clear Follow)", "zgk_lens_orig" not in sc.camera.data)
+    press(bpy.ops.svk.reframe_follow_clear)
+    check("X (Clear Follow)", "svk_lens_orig" not in sc.camera.data)
 
 
 @step
 def s_no_duplicates():
     n = len(bpy.data.scenes)
-    press(bpy.ops.zgk.reframe, aspect="9x16")              # already exists -> switch, don't duplicate
+    press(bpy.ops.svk.reframe, aspect="9x16")              # already exists -> switch, don't duplicate
     check("clicking an existing format switches instead of duplicating", len(bpy.data.scenes) == n)
 
 
 @step
 def s_all_three():
-    master = bpy.data.scenes[bpy.context.window.scene["zgk_source"]]
+    master = bpy.data.scenes[bpy.context.window.scene["svk_source"]]
     bpy.context.window.scene = master
-    r = press(bpy.ops.zgk.reframe_all)
-    fam = [s for s in bpy.data.scenes if s.get("zgk_source") == master.name]
+    r = press(bpy.ops.svk.reframe_all)
+    fam = [s for s in bpy.data.scenes if s.get("svk_source") == master.name]
     check("All Three button (no duplicates, built from the original)",
           r == {"FINISHED"} and len(fam) == 3 and bpy.context.window.scene == master,
           ", ".join(s.name for s in fam))
@@ -202,7 +201,7 @@ def s_all_three():
 
 @step
 def s_choose_folder():
-    _state["choose"] = press(bpy.ops.zgk.choose_output)
+    _state["choose"] = press(bpy.ops.svk.choose_output)
 
 
 @step
@@ -225,7 +224,7 @@ def s_render_all():
         s.render.resolution_percentage = 10
         s.frame_end = 8
         s.render.engine = "BLENDER_WORKBENCH"
-    r = press(bpy.ops.zgk.render_formats)
+    r = press(bpy.ops.svk.render_formats)
     mp4s = sorted(os.path.basename(p) for p in glob.glob(os.path.join(EXPORT, "Renders", "*.mp4")))
     check("Render All Formats (as clicked)", r == {"FINISHED"} and len(mp4s) >= 4, ", ".join(mp4s))
 
@@ -233,24 +232,24 @@ def s_render_all():
 @step
 def s_beat():
     sc = bpy.context.window.scene
-    open_panels("ZGK_PT_beat")
-    r = press(bpy.ops.zgk.beat_grid, bpm=120)
+    open_panels("SVK_PT_beat")
+    r = press(bpy.ops.svk.beat_grid, bpm=120)
     n = len([m for m in sc.timeline_markers if m.name.startswith("beat_")])
     check("BPM Grid", r == {"FINISHED"} and n == 1, f"{n} beat in 8 frames @120 (12 frames per beat)")
     for s in bpy.data.scenes:
         s.frame_end = 120
-    press(bpy.ops.zgk.beat_grid, bpm=120)
+    press(bpy.ops.svk.beat_grid, bpm=120)
     select(set())
     with ui_ctx():
-        poll_empty = bpy.ops.zgk.beat_key.poll()
+        poll_empty = bpy.ops.svk.beat_key.poll()
     check("pulse buttons disabled with nothing selected", not poll_empty)
     select({"Bottle Left", "Bottle Hero", "Bottle Right"})
-    r = press(bpy.ops.zgk.beat_key, mode="HOP", amount=0.03, decay=8, stagger=2)
+    r = press(bpy.ops.svk.beat_key, mode="HOP", amount=0.03, decay=8, stagger=2)
     check("Hop on the beat", r == {"FINISHED"})
-    press(bpy.ops.zgk.beat_tempo, mode="DOUBLE")
+    press(bpy.ops.svk.beat_tempo, mode="DOUBLE")
     n2 = len([m for m in sc.timeline_markers if m.name.startswith("beat_")])
-    press(bpy.ops.zgk.beat_tempo, mode="HALF")
-    check("Tempo x2 / 1/2", n2 > 10 and abs(sc.zgk_bpm - 120) < 1e-3, f"{n2} beats at x2")
+    press(bpy.ops.svk.beat_tempo, mode="HALF")
+    check("Tempo x2 / 1/2", n2 > 10 and abs(sc.svk_bpm - 120) < 1e-3, f"{n2} beats at x2")
     sc.frame_set(37)
 
 
@@ -267,9 +266,9 @@ def s_cuts():
     cam2.location.x -= 0.4
     select({sc.camera.name})
     with ui_ctx():
-        one = bpy.ops.zgk.beat_cuts.poll()
+        one = bpy.ops.svk.beat_cuts.poll()
     select({sc.camera.name, cam2.name})
-    r = press(bpy.ops.zgk.beat_cuts, every=2)
+    r = press(bpy.ops.svk.beat_cuts, every=2)
     cuts = [m for m in sc.timeline_markers if m.camera]
     check("Camera Cuts (needs 2 cameras, then cuts)", not one and r == {"FINISHED"} and len(cuts) > 3,
           f"{len(cuts)} cuts")
@@ -278,13 +277,13 @@ def s_cuts():
 @step
 def s_loop():
     sc = bpy.context.window.scene
-    open_panels("ZGK_PT_loop")
+    open_panels("SVK_PT_loop")
     select({"Bottle Hero"})
-    press(bpy.ops.zgk.loop_check)
-    found = sc.zgk_loop_issues
-    press(bpy.ops.zgk.loop_fix, method="CLOSE")
-    check("Loop Check finds + Fix clears", found >= 1 and sc.zgk_loop_issues == 0, f"{found} -> {sc.zgk_loop_issues}")
-    r = press(bpy.ops.zgk.loop_set_range, length=96)
+    press(bpy.ops.svk.loop_check)
+    found = sc.svk_loop_issues
+    press(bpy.ops.svk.loop_fix, method="CLOSE")
+    check("Loop Check finds + Fix clears", found >= 1 and sc.svk_loop_issues == 0, f"{found} -> {sc.svk_loop_issues}")
+    r = press(bpy.ops.svk.loop_set_range, length=96)
     check("Set Loop Range", r == {"FINISHED"} and sc.frame_end - sc.frame_start + 1 == 96)
     sc.frame_end = 120
 
@@ -296,8 +295,8 @@ def s_shot_loop():
 
 @step
 def s_help():
-    open_panels("ZGK_PT_reframe")
-    r = press(bpy.ops.zgk.help, topic="GUIDES")
+    open_panels("SVK_PT_reframe")
+    r = press(bpy.ops.svk.help, topic="GUIDES")
     check("? help popup opens", r in ({"RUNNING_MODAL"}, {"FINISHED"}, {"INTERFACE"}), str(r))
 
 
@@ -309,8 +308,8 @@ def s_shot_help():
 @step
 def s_wedge_dialog():
     bpy.context.window_manager.clipboard = 'bpy.data.lights["Key"].energy'
-    open_panels("ZGK_PT_wedge")
-    r = press(bpy.ops.zgk.wedge)
+    open_panels("SVK_PT_wedge")
+    r = press(bpy.ops.svk.wedge)
     check("Wedge dialog opens (path auto-pasted)", r in ({"RUNNING_MODAL"}, {"INTERFACE"}), str(r))
 
 
@@ -323,26 +322,26 @@ def s_shot_wedge():
 def s_wedge_run():
     sc = bpy.context.window.scene
     with ui_ctx():
-        r = bpy.ops.zgk.wedge("EXEC_DEFAULT", data_path='bpy.data.lights["Key"].energy', start=2, end=20,
+        r = bpy.ops.svk.wedge("EXEC_DEFAULT", data_path='bpy.data.lights["Key"].energy', start=2, end=20,
                               count=4, percent=10, columns=2)
     check("Wedge renders a contact sheet into the export folder",
-          r == {"FINISHED"} and os.path.exists(sc.zgk_last_sheet) and sc.zgk_last_sheet.startswith(EXPORT.rstrip(os.sep)),
-          sc.zgk_last_sheet)
+          r == {"FINISHED"} and os.path.exists(sc.svk_last_sheet) and sc.svk_last_sheet.startswith(EXPORT.rstrip(os.sep)),
+          sc.svk_last_sheet)
     check("guide page ships with the add-on", os.path.exists(os.path.join(
-        os.path.dirname(sys.modules[type(bpy.types.ZGK_PT_main).__module__].__file__) if False else
-        os.path.dirname(bpy.types.ZGK_PT_main.__module__ and sys.modules[bpy.types.ZGK_PT_main.__module__].__file__),
+        os.path.dirname(sys.modules[type(bpy.types.SVK_PT_main).__module__].__file__) if False else
+        os.path.dirname(bpy.types.SVK_PT_main.__module__ and sys.modules[bpy.types.SVK_PT_main.__module__].__file__),
         "assets", "guide.html")))
 
 
 @step
 def s_shot_about():
-    open_panels("ZGK_PT_wedge")
+    open_panels("SVK_PT_wedge")
     shot("hand_08_wedge_done_about.png")
 
 
 @step
 def s_file_browser():
-    press(bpy.ops.zgk.beat_detect)                       # opens Blender's file browser, filtered to audio
+    press(bpy.ops.svk.beat_detect)                       # opens Blender's file browser, filtered to audio
 
 
 @step

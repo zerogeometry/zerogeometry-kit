@@ -1,5 +1,5 @@
-"""ZeroGeometry viewport overlay (camera view only): real asymmetric social safe zones, a format badge
-and a beat pulse -- drawn in the ZeroGeometry palette with the brand fonts."""
+"""Camera Guides (camera view only, never rendered): platform safe areas for vertical video, a format badge
+and a beat pulse."""
 import os
 import bpy
 import blf
@@ -11,14 +11,25 @@ LIME = (0.8, 1.0, 0.0)            # #CCFF00
 INK = (0.04, 0.04, 0.04)          # #0A0A0A
 ASSETS = os.path.join(os.path.dirname(__file__), "assets")
 
-# fraction of the frame covered by platform UI, measured on 1080x1920 screenshots
-# (left, right, top, bottom) + the right-hand button column's vertical extent (from, to) as frame fractions
-PLATFORMS = {
-    "TIKTOK": dict(label="TikTok", l=0.04, r=0.04, t=0.07, b=0.21, col=(0.86, 1.0, 0.34, 0.80)),
-    "REELS":  dict(label="Reels",  l=0.04, r=0.04, t=0.07, b=0.20, col=(0.86, 1.0, 0.36, 0.78)),
-    "SHORTS": dict(label="Shorts", l=0.04, r=0.04, t=0.06, b=0.17, col=(0.86, 1.0, 0.34, 0.72)),
-    "NONE":   dict(label="", l=0, r=0, t=0, b=0, col=(1, 1, 0, 0)),
+# Fraction of a 9:16 frame covered by each app's interface (approximate, from 1080x1920 screenshots):
+# l/t/b = left/top/bottom margins, side = width of the right-hand button column, side_top = how far up
+# (from the bottom) that column reaches.
+_APPS = {
+    "TIKTOK": dict(label="TikTok", l=0.04, t=0.07, b=0.21, side=0.17, side_top=0.62),
+    "REELS":  dict(label="Instagram Reels", l=0.04, t=0.07, b=0.20, side=0.16, side_top=0.60),
+    "SHORTS": dict(label="YouTube Shorts", l=0.04, t=0.06, b=0.17, side=0.15, side_top=0.58),
 }
+PLATFORMS = dict(_APPS)
+# "All platforms": the strictest edge of every app, so one frame works everywhere
+PLATFORMS["ALL"] = dict(label="All platforms", **{k: max(a[k] for a in _APPS.values())
+                                                for k in ("l", "t", "b", "side", "side_top")})
+PLATFORMS["NONE"] = dict(label="", l=0.0, t=0.0, b=0.0, side=0.0, side_top=0.0)
+
+
+def safe_box(platform):
+    """Safe area as frame fractions (x0, x1, y0, y1), y measured from the bottom."""
+    p = PLATFORMS.get(platform, PLATFORMS["NONE"])
+    return p["l"], 1.0 - p["side"], p["b"], 1.0 - p["t"]
 _fonts = {}
 _handle = None
 
@@ -94,12 +105,12 @@ def _beats(sc):
 
 def draw():
     sc = bpy.context.scene
-    if not getattr(sc, "zgk_overlay", False):
+    if not getattr(sc, "svk_overlay", False):
         return
     try:
         _draw(bpy.context, sc)
     except Exception as ex:                      # never break the viewport
-        print("ZeroGeometry Kit overlay:", ex)
+        print("Social Video Kit overlay:", ex)
     finally:
         gpu.state.blend_set("NONE")
 
@@ -117,19 +128,18 @@ def _draw(context, sc):
     u = context.preferences.system.ui_scale                      # follow HiDPI / Resolution Scale
     shader = gpu.shader.from_builtin("UNIFORM_COLOR")
     gpu.state.blend_set("ALPHA")
-    p = PLATFORMS.get(sc.zgk_platform, PLATFORMS["NONE"])
-    if sc.zgk_platform != "NONE":
+    p = PLATFORMS.get(sc.svk_platform, PLATFORMS["NONE"])
+    if sc.svk_platform != "NONE":
         tint = (*LIME, 0.07)
-        # covered bands
-        _rect(shader, x0, y1 - h * p["t"], x1, y1, tint)                       # top bar
-        _rect(shader, x0, y0, x1, y0 + h * p["b"], tint)                       # caption + nav
-        _rect(shader, x1 - w * 0.17, y0 + h * p["b"], x1, y0 + h * 0.62, tint)  # like / comment / share column
-        # inner safe box
-        sx0, sx1 = x0 + w * p["l"], x1 - w * 0.17
-        sy0, sy1 = y0 + h * p["b"], y1 - h * p["t"]
+        # areas covered by the app interface
+        _rect(shader, x0, y1 - h * p["t"], x1, y1, tint)                                 # top bar
+        _rect(shader, x0, y0, x1, y0 + h * p["b"], tint)                                 # caption + nav
+        _rect(shader, x1 - w * p["side"], y0 + h * p["b"], x1, y0 + h * p["side_top"], tint)  # button column
+        fx0, fx1, fy0, fy1 = safe_box(sc.svk_platform)
+        sx0, sx1, sy0, sy1 = x0 + w * fx0, x0 + w * fx1, y0 + h * fy0, y0 + h * fy1
         _outline(shader, sx0, sy0, sx1, sy1, (*LIME, 0.95), 2.0)
-        if f.get("mono") is not None:
-            _text(f["mono"], f"{p['label'].upper()} SAFE", sx0 + 6 * u, sy1 - 16 * u, int(11 * u), (*LIME, 0.95))
+        _text(f.get("mono", 0), f"SAFE AREA · {p['label'].upper()}", sx0 + 6 * u, sy1 - 16 * u,
+              int(11 * u), (*LIME, 0.95))
     # frame outline + badge
     _outline(shader, x0, y0, x1, y1, (*LIME, 0.55), 1.0)
     r = sc.render
@@ -137,20 +147,15 @@ def _draw(context, sc):
     named = {round(9 / 16, 3): "9:16", round(4 / 5, 3): "4:5", 1.0: "1:1", round(16 / 9, 3): "16:9"}
     fmt = named.get(round(ratio, 3), f"{r.resolution_x}x{r.resolution_y}")
     fs = int(12 * u)
-    bx, by = x0 + 8 * u, y0 + 8 * u                           # inside the frame, bottom-left
-    blf.size(f.get("light", 0), fs)
-    zw = blf.dimensions(f.get("light", 0), "ZERO ")[0]
-    blf.size(f.get("bold", 0), fs)
-    gw = blf.dimensions(f.get("bold", 0), "GEOMETRY")[0]
+    bx, by = x0 + 8 * u, y0 + 8 * u                           # format badge, inside the frame, bottom-left
+    label = f"{fmt}   {r.resolution_x}×{r.resolution_y}"
     blf.size(f.get("mono", 0), fs)
-    fw = blf.dimensions(f.get("mono", 0), fmt)[0]
-    bw, bh = 10 * u + zw + gw + 12 * u + fw + 10 * u, 22 * u
+    fw = blf.dimensions(f.get("mono", 0), label)[0]
+    bw, bh = 10 * u + fw + 10 * u, 22 * u
     _rect(shader, bx, by, bx + bw, by + bh, (*INK, 0.92))
     _rect(shader, bx, by, bx + 4 * u, by + bh, (*LIME, 1.0))
-    _text(f.get("light", 0), "ZERO", bx + 10 * u, by + 6 * u, fs, (1, 1, 1, 0.9))
-    _text(f.get("bold", 0), "GEOMETRY", bx + 10 * u + zw, by + 6 * u, fs, (1, 1, 1, 1))
-    _text(f.get("mono", 0), fmt, bx + 10 * u + zw + gw + 12 * u, by + 6 * u, fs, (*LIME, 1.0))
-    # beat pulse: the zerogeometry.com lime dot, bright on the beat, fading over 6 frames
+    _text(f.get("mono", 0), label, bx + 10 * u, by + 6 * u, fs, (*LIME, 1.0))
+    # beat pulse: bright on the beat, fading over 6 frames
     beats = _beats(sc)
     if beats:
         import bisect
@@ -168,14 +173,14 @@ def _draw(context, sc):
             batch.draw(shader)
 
 
-class ZGK_OT_overlay_toggle(bpy.types.Operator):
-    """Camera Guides: drawn in camera view only, never rendered. Shows the format badge, the
-TikTok/Reels/Shorts safe area (when a platform is picked) and a lime dot that pulses on every beat"""
-    bl_idname = "zgk.overlay_toggle"
+class SVK_OT_overlay_toggle(bpy.types.Operator):
+    """Camera Guides: drawn in camera view only, never rendered. Shows the format badge, the vertical-video
+safe area (when a platform is picked) and a dot that pulses on every beat marker"""
+    bl_idname = "svk.overlay_toggle"
     bl_label = "Camera Guides"
 
     def execute(self, context):
-        context.scene.zgk_overlay = not context.scene.zgk_overlay
+        context.scene.svk_overlay = not context.scene.svk_overlay
         for a in context.screen.areas if context.screen else []:
             if a.type == "VIEW_3D":
                 a.tag_redraw()
@@ -196,4 +201,4 @@ def unregister_handler():
     unload_fonts()
 
 
-classes = (ZGK_OT_overlay_toggle,)
+classes = (SVK_OT_overlay_toggle,)
